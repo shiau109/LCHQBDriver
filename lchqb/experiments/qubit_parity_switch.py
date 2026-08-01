@@ -8,11 +8,14 @@ appends instead of averaging). No ``num_averages`` exists for this experiment.
 Two things are deliberately absent, and both are the physics:
 
 * **No ``add_reset``.** Between shots this experiment waits ONLY for resonator
-  depletion — the sequence re-prepares the equator every shot regardless of the
-  starting pole, and the shot cadence IS the telegraph timebase the rate is
-  measured against. The Parameters carry no ``reset_method`` at all, so
-  ``QbloxBackend.acquire``'s pre-probe ``check_reset_method`` sees the thermal
-  default and passes trivially without a ``Reset`` ever being built.
+  depletion, and the absence of a reset is REQUIRED, not an optimization: the
+  sequence inverts with the pole the previous shot left behind, so the readout
+  is the running XOR of the parity and the consecutive-pair difference is the
+  parity telegraph the rate is fitted from. Resetting to |0> each shot would
+  sever that chain. The shot cadence is also the telegraph timebase. The
+  Parameters carry no ``reset_method`` at all, so ``QbloxBackend.acquire``'s
+  pre-probe ``check_reset_method`` sees the thermal default and passes
+  trivially without a ``Reset`` ever being built.
 * **No ``supports_active_reset``.** Nothing to opt into.
 
 The idle time is resolved by the neutral layer (``define_sweep`` refused
