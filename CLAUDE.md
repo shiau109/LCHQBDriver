@@ -270,9 +270,9 @@ in the lab venv too:
 `D:\github\.venv-qblox\Scripts\python.exe -m pytest tests/ -q`.
 
 ### Testing discipline — here, just run the whole thing
-`uv run pytest tests/ -q` — **208 tests, ~58 s** (plain `uv run` is correct: `scqo` is a hard
+`uv run pytest tests/ -q` — **214 tests, ~98 s** (plain `uv run` is correct: `scqo` is a hard
 dependency in `pyproject.toml`, so uv's sync keeps it). At this size a selection map would cost
-more attention than it saves; unlike SCQO (476 tests, ~7 min) and scqat (296 / ~53 s), the full
+more attention than it saves; unlike SCQO (618 tests, ~10 min) and scqat (329 / ~84 s), the full
 suite IS the targeted run. Run it before every commit.
 
 The one narrowing worth knowing: **`test_scqo_glue.py` is ~14 s of the 33 s** — it shells out to
