@@ -49,14 +49,17 @@ class QbloxQubitParitySwitch(QubitParitySwitch):
         from qblox_scheduler.operations import IdlePulse, Measure, X90, Y90
         from qblox_scheduler.operations.loop_domains import DType, arange
 
-        num_shots = int(self.params.num_shots)
+        # resolved by the neutral layer from record_time_s (or an explicit
+        # num_shots override) — never read params.num_shots here, it is None in
+        # the normal case.
+        num_shots = self.resolved_num_shots()
         if num_shots > _MAX_ACQ_BINS:
             raise ValueError(
-                f"num_shots={num_shots} exceeds the sequencer's acquisition-bin "
+                f"{num_shots} shots exceeds the sequencer's acquisition-bin "
                 f"limit ({_MAX_ACQ_BINS}): every shot is its own labeled bin "
-                f"here (no averaging). Lower num_shots, or take several runs — "
-                f"a campaign step repeats this experiment with its own folder "
-                f"per repeat."
+                f"here (no averaging). Shorten record_time_s, or take several "
+                f"runs — a campaign step repeats this experiment with its own "
+                f"folder per repeat."
             )
 
         self.probe_shot_period_s: dict[str, float] = {}
