@@ -169,6 +169,8 @@ def test_state_mode_compiles_with_a_discriminator(tmp_path, roster):
 
 def test_too_many_shots_refused_by_name(tmp_path, roster):
     backend, exp = _experiment(tmp_path, roster)
+    # an explicit num_shots override bypasses max_num_shots, so it reaches the
+    # probe and the SEQUENCER limit is what must catch it
     exp.params = exp.params.model_copy(update={"num_shots": 4_000_000})
     exp.sweep_axes = exp.define_sweep()
     with pytest.raises(ValueError, match="acquisition-bin"):
