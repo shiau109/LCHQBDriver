@@ -59,6 +59,29 @@ _DEFAULT_MAX_OUTPUT_ATT = 60
 _UNIVERSALLY_SAFE_ATT = 20
 #: Sidecar holding the discovered per-output maxima, beside mixer_cal.json.
 ATT_LIMITS_FILE = "att_limits.json"
+#: How long to wait for the sequencers to stop, in SECONDS (the unit
+#: ``HardwareAgent.run`` takes; its own default is 10 s). This is wall clock for
+#: the whole acquisition, so it must exceed the longest schedule any experiment
+#: can legally ask for — not a typical one.
+#:
+#: KEEP THIS A MULTIPLE OF 60. The seconds only look like seconds: the
+#: instrument coordinator hands the cluster ``timeout_sec // 60`` MINUTES
+#: (qblox_scheduler ``instrument_coordinator/components/qblox.py``), floor
+#: division, so the real granularity is one minute and anything under 60 s
+#: truncates to a ZERO-minute deadline. That is also why the error names
+#: minutes while this constant is in seconds.
+#:
+#: The binding case is ``qubit_parity_switch``, which is parameterized by RECORD
+#: TIME and deliberately runs one long uninterrupted train of single shots. Its
+#: ceiling is Qblox's 3e6 acquisition bins: at chipA's 30.4 us shot that is 91 s
+#: of sequencer time, and 145 s at ``idle_multiple=3`` (~48.5 us). The old 120 s
+#: sat right inside that band and killed a 30 s-record run on 2026-08-01
+#: ("Sequencers slot 4 sequencer 0 did not stop in timeout period of 2
+#: minutes"). 300 s clears the bin-limited maximum about 2x over.
+#:
+#: A fixed number is honest here precisely BECAUSE the bin ceiling bounds the
+#: schedule — this is not a guess that a longer run could quietly outgrow.
+_RUN_TIMEOUT_S = 300
 
 
 def _solve_att(name: str, target: float, what: str,
@@ -1208,7 +1231,7 @@ class QbloxBackend(Backend):
         with self._thermalization_override(experiment):
             schedule = experiment.probe()  # native qblox_scheduler.Schedule
             try:
-                raw = self._hw_agent.run(schedule, timeout=120)
+                raw = self._hw_agent.run(schedule, timeout=_RUN_TIMEOUT_S)
             finally:
                 # The clusters only exist once run() has connected them, and the loops
                 # this quiets are the ones qblox_instruments leaves open until

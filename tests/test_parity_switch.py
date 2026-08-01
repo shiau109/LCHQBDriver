@@ -175,3 +175,32 @@ def test_too_many_shots_refused_by_name(tmp_path, roster):
     exp.sweep_axes = exp.define_sweep()
     with pytest.raises(ValueError, match="acquisition-bin"):
         exp.probe()
+
+
+class TestAcquisitionTimeout:
+    """The wall-clock ceiling on a run, which this experiment is the binding
+    case for: it is parameterized by RECORD TIME and plays one long
+    uninterrupted train of single shots, so its schedule is the longest any
+    experiment can legally ask the cluster for.
+    """
+
+    def test_covers_the_longest_bin_limited_record(self):
+        """3e6 acquisition bins at chipA's ~48.5 us shot (idle_multiple=3) is
+        ~145 s of sequencer time — the most this experiment can ever request,
+        because the bin ceiling bounds it. The timeout must clear that."""
+        from lchqb.backend.qblox_backend import _RUN_TIMEOUT_S
+
+        longest_run_s = 3_000_000 * 48.5e-6
+        assert _RUN_TIMEOUT_S > longest_run_s
+        # ...and the old 120 s did NOT, which is what killed a 30 s-record run
+        assert 120 < longest_run_s
+
+    def test_is_a_whole_number_of_minutes(self):
+        """The seconds only look like seconds: the instrument coordinator hands
+        the cluster ``timeout_sec // 60`` MINUTES, floor division. A value that
+        is not a multiple of 60 silently loses the remainder, and anything under
+        60 truncates to a zero-minute deadline."""
+        from lchqb.backend.qblox_backend import _RUN_TIMEOUT_S
+
+        assert _RUN_TIMEOUT_S % 60 == 0
+        assert _RUN_TIMEOUT_S // 60 == 5      # the 5 minutes actually enforced
