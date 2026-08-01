@@ -73,6 +73,13 @@ def test_probe_compiles(tmp_path, roster, name):
     # the two-tone probes play the drive chain's residual (spec_amp), which the
     # fixture leaves unseeded (NaN); the core run() solves it before probing
     exp.device.channel("q1", "drive").drive_power_dbm = -33.0
+    # qubit_thermal_population prepares only |g>, so it cannot locate |e> in its
+    # own data and refuses to sweep without the stored blob centers an accepted
+    # single_shot_readout leaves behind. Monitor writes, harmless to every other
+    # probe here.
+    readout = exp.device.channel("q1", "readout")
+    readout.pos_g_i, readout.pos_g_q = 0.0, 0.0
+    readout.pos_e_i, readout.pos_e_q = 4.0, 0.0
 
     # compile, don't just build — the compiler is where the instrument's own
     # rules live (see this module's docstring). compile_probe sets sweep_axes

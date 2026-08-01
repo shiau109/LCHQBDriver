@@ -10,6 +10,7 @@ from . import qubit_relaxation  # noqa: F401  (import side effect: @register)
 from . import qubit_spectroscopy  # noqa: F401  (import side effect: @register)
 from . import qubit_spectroscopy_flux_pulse  # noqa: F401  (import side effect: @register)
 from . import qubit_spectroscopy_overlap  # noqa: F401  (import side effect: @register)
+from . import qubit_thermal_population  # noqa: F401  (import side effect: @register)
 from . import readout_frequency  # noqa: F401  (import side effect: @register)
 from . import readout_power  # noqa: F401  (import side effect: @register)
 from . import resonator_spectroscopy  # noqa: F401  (import side effect: @register)
@@ -32,5 +33,6 @@ __all__ = [
     "readout_frequency",
     "qubit_relaxation",
     "qubit_echo",
+    "qubit_thermal_population",
     "single_shot_readout",
 ]
