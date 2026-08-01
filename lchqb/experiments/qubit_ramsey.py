@@ -4,6 +4,16 @@ Same one-method pattern as resonator spectroscopy, on a completely different phy
 experiment: X90 — idle(t) — X90 — Measure, looping the idle time. Parameters, the
 decaying-cosine fit, T2*/detuning extraction, and the drive_freq_hz writeback are all
 inherited from ``scqo.experiments.QubitRamsey``.
+
+The artificial detuning rides as a phase ramp on the second pi/2; both its SPELLING and
+its SIGN are load-bearing and were each silently wrong before 2026-08-01 (see probe()).
+``tests/test_ramsey_detuning.py`` pins them.
+
+ONE LATENT LIMIT worth knowing before raising ``num_points``: while the drive's
+``drag_beta`` is 0 every point shares one normalized waveform and the phase rides in the
+AWG gains, so the ramp is free. With a calibrated non-zero beta each DISTINCT phase mints
+its own I/Q waveform pair, and the sequencer's 16384-sample budget becomes the ceiling —
+at a 80 ns pi/2, 101 points fits (16160 samples) and 103 does not (16480).
 """
 
 from __future__ import annotations
@@ -29,7 +39,7 @@ class QbloxQubitRamsey(QubitRamsey):
 
     def probe(self) -> Any:
         from qblox_scheduler import Schedule
-        from qblox_scheduler.operations import IdlePulse, Measure, X90
+        from qblox_scheduler.operations import IdlePulse, Measure, Rxy, X90
         from qblox_scheduler.operations.loop_domains import DType, arange, linspace
 
         idle_ns = self.sweep_axes["idle_time_ns"]
@@ -44,13 +54,31 @@ class QbloxQubitRamsey(QubitRamsey):
                 with sub.loop(
                     linspace(idle_ns[0] * 1e-9, idle_ns[-1] * 1e-9, idle_ns.size, dtype=DType.TIME)
                 ) as tau:
-                    # First pi/2; the artificial detuning is applied as a frame phase that
-                    # advances with the idle time, producing the Ramsey fringe.
+                    # First pi/2; the artificial detuning is a phase ramp on the SECOND
+                    # pi/2 that grows with the idle time, producing the Ramsey fringe.
                     add_reset(sub, self, qubit_name)
                     sub.add(X90(qubit_name))
                     sub.add(IdlePulse(tau))
-                    # Detune via accumulated phase = 2*pi * detuning * tau on the second pi/2.
-                    sub.add(X90(qubit_name, phase=360.0 * detuning * tau))
+                    # It MUST be Rxy(phi=...), never X90(..., phase=...). `phase` is not an
+                    # Rxy factory kwarg, so it lands in gate_info["device_overrides"] and
+                    # circuit_to_device drops it (`if key in factory_kwargs`, line ~762) —
+                    # silently, on a schedule that still compiles. This probe spent its
+                    # whole life requesting a detuning the instrument never applied. `phi`
+                    # IS a gate_info factory kwarg (transmon_element.py
+                    # gate_info_factory_kwargs=["theta","phi"]), and Rxy(theta=90) is the
+                    # same pulse as X90 (amplitude = amp180*theta/180) — only the phase
+                    # differs.
+                    #
+                    # The sign is NEGATIVE, and that is not a typo. A programmed phase is a
+                    # carrier-phase ADVANCE (the NCO emits I*cos(wt) - Q*sin(wt) =
+                    # Re[(I+iQ)e^{iwt}], backends/qblox/operation_handling/pulses.py), so it
+                    # runs the OPPOSITE way to the free precession of a qubit sitting above
+                    # its drive. Only a backward ramp makes the observed fringe
+                    # (applied + err) — the quantity scqo's shared estimate() subtracts
+                    # `applied` from. A positive ramp gives |applied - err|, and then every
+                    # accepted update walks the drive to the absorbing point err = 2*applied,
+                    # where detuning_error_hz reads exactly 0.0 and the fit looks perfect.
+                    sub.add(Rxy(theta=90.0, phi=-360.0 * detuning * tau, qubit=qubit_name))
                     sub.add(
                         Measure(
                             qubit_name,

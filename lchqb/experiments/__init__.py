@@ -4,6 +4,7 @@ Add a line here for each new experiment module so its ``@register`` runs.
 """
 
 from . import qubit_echo  # noqa: F401  (import side effect: @register)
+from . import qubit_parity_switch  # noqa: F401  (import side effect: @register)
 from . import qubit_power_rabi  # noqa: F401  (import side effect: @register)
 from . import qubit_ramsey  # noqa: F401  (import side effect: @register)
 from . import qubit_relaxation  # noqa: F401  (import side effect: @register)
@@ -34,5 +35,6 @@ __all__ = [
     "qubit_relaxation",
     "qubit_echo",
     "qubit_thermal_population",
+    "qubit_parity_switch",
     "single_shot_readout",
 ]
