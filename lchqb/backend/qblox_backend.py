@@ -683,6 +683,27 @@ class QbloxFluxChannel(_QbloxChannelView, make_view_base("flux")):
     def idle_flux(self, value: float) -> None:
         _write(self._element.flux_params, "sweet_spot", value)
 
+    # ------------------------------------------------------- unrealized knobs
+    # The flux line's output delay vs the drive line. The vendor home exists —
+    # hardware_options.latency_corrections[<port-clock>] (seconds) — but no Qblox
+    # experiment writes it yet (qubit_xyz_delay is QM-only), so it stays
+    # Unrealized (fieldmap.UNREALIZED) with a concrete raising pair, since
+    # make_view_base declares an abstract property per knob of the kind.
+    _FLUX_DELAY_UNREALIZED = (
+        "flux_delay_s is Unrealized on the Qblox backend: no XY-Z delay probe is "
+        "wired here yet. The home exists — hardware_options.latency_corrections "
+        "per port-clock (seconds) — and this promotes to a real binding when a "
+        "Qblox qubit_xyz_delay probe lands"
+    )
+
+    @property
+    def flux_delay_s(self) -> float:
+        raise NotImplementedError(f"{self.name}: {self._FLUX_DELAY_UNREALIZED}")
+
+    @flux_delay_s.setter
+    def flux_delay_s(self, value: float) -> None:
+        raise NotImplementedError(f"{self.name}: {self._FLUX_DELAY_UNREALIZED}")
+
 
 #: channel kind -> the view class this backend serves for it. A kind absent here
 #: (``pump``) and every non-channel entity (modes, lines, composites) is a KeyError

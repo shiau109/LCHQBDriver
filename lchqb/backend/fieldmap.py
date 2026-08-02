@@ -197,8 +197,17 @@ UNREALIZED: dict[str, dict[str, Unrealized]] = {
             "feedback' - it does, via conditional playback. QM's while_(I > "
             "rus_exit_threshold) is what this field exists for"),
     },
-    # "flux" is absent: its one knob (idle_flux) is REALIZED as of 2026-07-30 -
-    # see FIELD_BINDINGS above.
+    "flux": {
+        "flux_delay_s": Unrealized(
+            "flux", "flux_delay_s",
+            "no flux-line delay wired for Qblox yet: the hardware home exists — "
+            "hardware_options.latency_corrections[<port-clock>] (seconds, applied "
+            "per port-clock and min-subtracted across the cluster at compile) — "
+            "but no scqo experiment writes it here (qubit_xyz_delay is QM-only "
+            "today). Promote to a real latency_corrections binding when a Qblox "
+            "XY-Z delay probe lands. idle_flux, the kind's other knob, is REALIZED "
+            "above (element.flux_params.sweet_spot)"),
+    },
 }
 
 #: Backend-unique calibration knobs, vendor-owned and untracked by SCQO (edit in
