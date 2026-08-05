@@ -54,9 +54,16 @@ def _env(tmp_path: Path) -> dict:
         "schema = 1\n[q0]\nf_01_hz = 3.8e9\n[q0_res]\nf_r_hz = 5.95e9\n",
         encoding="utf-8",
     )
+    # Always pin parameters_file (empty): without it the CLI falls back to the
+    # runner's real ~/.scqo/parameters.toml, whose standing defaults can flip
+    # the sim fit to failed (same guard as SCQO's test_cli_run).
+    params = tmp_path / "parameters.toml"
+    params.write_text("", encoding="utf-8")
     config = tmp_path / "config.toml"
     config.write_text(
-        f"[lab]\ndevice = \"simdev\"\ndata_root = '{data_root.as_posix()}'\n", encoding="utf-8"
+        f"[lab]\ndevice = \"simdev\"\ndata_root = '{data_root.as_posix()}'\n"
+        f"parameters_file = '{params.as_posix()}'\n",
+        encoding="utf-8",
     )
     return {**os.environ, "SCQO_CONFIG": str(config), "SCQO_USER_CONFIG": "none"}
 
