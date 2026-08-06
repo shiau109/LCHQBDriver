@@ -1266,7 +1266,7 @@ class QbloxBackend(Backend):
     @staticmethod
     def _to_canonical(raw: xr.Dataset, experiment: "Experiment") -> xr.Dataset:
         """Relabel a raw Qblox dataset into scqo's convention: dims (target, <sweep>),
-        vars I/Q — or the single ``state`` variable when the run was discriminated.
+        vars I/Q — or the discriminated variable when the run was thresholded.
 
         The probes label every acquisition ``acq_channel=f"S_21_{qubit}"`` with the
         sweep loop variable as a per-point coordinate (cal02 reference pattern), so
@@ -1277,13 +1277,18 @@ class QbloxBackend(Backend):
 
         THRESHOLDED runs (``use_state_discrimination``, experiments/_state.py) come
         back on the SAME variable but REAL: the FPGA already compared each shot
-        against acq_threshold, so the averaged value is the population. Which mode
-        it was is read off the vendor's own ``acq_protocol`` attribute rather than
-        the parameter — the attribute describes what the hardware actually did and
-        cannot disagree with it. Getting this wrong is silent, not loud: taking
-        ``.real``/``.imag`` of a thresholded result would put the population in
-        ``I``, leave ``Q`` at zero, still satisfy the ``("I","Q")`` contract, and
-        hand scqat a degenerate blob to reduce.
+        against acq_threshold. Which mode it was is read off the vendor's own
+        ``acq_protocol`` attribute rather than the parameter — the attribute
+        describes what the hardware actually did and cannot disagree with it.
+        Getting this wrong is silent, not loud: taking ``.real``/``.imag`` of a
+        thresholded result would put the population in ``I``, leave ``Q`` at zero,
+        still satisfy the ``("I","Q")`` contract, and hand scqat a degenerate blob
+        to reduce.
+
+        The discriminated VARIABLE NAME follows the readout schema (SCQO TUTORIAL
+        §11): with a ``shot_idx`` sweep the values are per-shot outcomes and stay
+        ``state``; without one the cluster averaged the thresholded shots, so the
+        values are probabilities and land on ``population``.
         """
         import numpy as np
 
@@ -1326,7 +1331,8 @@ class QbloxBackend(Backend):
             # skips the point.
             state = np.stack(rows).real.astype(float)
             state[state == -1.0] = np.nan
-            return xr.Dataset({"state": (dims, state)}, coords=coords)
+            var = "state" if "shot_idx" in axes else "population"
+            return xr.Dataset({var: (dims, state)}, coords=coords)
         stacked = np.stack(rows)
         return xr.Dataset(
             {"I": (dims, stacked.real), "Q": (dims, stacked.imag)}, coords=coords

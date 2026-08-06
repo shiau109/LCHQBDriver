@@ -123,6 +123,11 @@ Everything else (parameters, fitting, writeback, simulation) is inherited from `
   `update()` proposes both. `readout_rus_threshold` stays Unrealized — it is a
   repeat-until-success LOOP EXIT and active reset here is not a loop, so there is no
   second threshold to write. Qblox absolutely does have feedback; it just isn't that.
+- **Discriminated variable naming follows the readout schema** (SCQO TUTORIAL §11 /
+  CLAUDE.md digest): a thresholded run with a `shot_idx` sweep decodes to per-shot
+  `state` (integer outcomes — qubit_parity_switch); without one the cluster averaged
+  the thresholded shots, so the decode lands on `population` (a probability). `state`
+  never means an averaged value.
 - **Active reset** (`reset_method="active"`) lives in `experiments/_reset.py`, the ONE
   door every probe builds its reset through (`add_reset`) — enforced by
   `test_no_probe_constructs_the_reset_gate_directly`. Vendor `ConditionalReset` =

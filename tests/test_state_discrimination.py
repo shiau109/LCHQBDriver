@@ -239,9 +239,12 @@ def _raw(values, *, protocol, key="S_21_q1"):
     return xr.Dataset({key: arr})
 
 
-def test_thresholded_raw_becomes_a_state_variable(tmp_path, roster):
+def test_thresholded_average_becomes_a_population_variable(tmp_path, roster):
     """The silent-failure guard: the vendor's own acq_protocol attr decides, not the
-    parameter, because the attr describes what the hardware actually did."""
+    parameter, because the attr describes what the hardware actually did. With no
+    shot_idx sweep the cluster AVERAGED the thresholded shots, so under the readout
+    schema the values are probabilities and land on `population` — `state` is
+    reserved for per-shot outcomes."""
     from lchqb.backend.qblox_backend import QbloxBackend
 
     _backend, exp = _experiment(tmp_path, roster, "qubit_relaxation", use_state=True)
@@ -251,11 +254,39 @@ def test_thresholded_raw_becomes_a_state_variable(tmp_path, roster):
 
     ds = QbloxBackend._to_canonical(_raw(populations, protocol="ThresholdedAcquisition"), exp)
 
-    assert set(ds.data_vars) == {"state"}
-    assert ds["state"].dims == ("target", "wait_time_ns")
+    assert set(ds.data_vars) == {"population"}
+    assert ds["population"].dims == ("target", "wait_time_ns")
     assert list(ds.coords["target"].values) == ["q1"]
-    np.testing.assert_allclose(ds["state"].values[0], populations)
-    exp.Contract.validate(ds)  # the STATE_ALT branch of the neutral contract
+    np.testing.assert_allclose(ds["population"].values[0], populations)
+    exp.Contract.validate(ds)  # the POPULATION_ALT branch of the neutral contract
+
+
+def test_thresholded_shot_sweep_keeps_the_state_variable(tmp_path, roster):
+    """With a shot_idx sweep every thresholded value is one shot's OUTCOME, so the
+    variable stays `state` (the per-shot form) — qubit_parity_switch's telegraph."""
+    from conftest import make_backend, make_experiment
+
+    from lchqb.backend.qblox_backend import QbloxBackend
+    from lchqb.experiments.qubit_parity_switch import QbloxQubitParitySwitch
+
+    backend = make_backend(tmp_path, roster)
+    exp = make_experiment(
+        QbloxQubitParitySwitch, backend, roster,
+        QbloxQubitParitySwitch.Parameters(targets=["q1"], num_shots=100,
+                                          use_state_discrimination=True))
+    # define_sweep derives the fixed idle from the stored splitting and the shot
+    # period from the depletion knob (the test_parity_switch fixture values).
+    exp.device.channel("q1", "drive").parity_delta_f_hz = 250e3
+    exp.device.channel("q1", "readout").readout_depletion_s = 795.77e-9
+    exp.sweep_axes = exp.define_sweep()
+    n = exp.sweep_axes["shot_idx"].size
+    shots = (np.arange(n) % 2).astype(float)
+
+    ds = QbloxBackend._to_canonical(_raw(shots, protocol="ThresholdedAcquisition"), exp)
+
+    assert set(ds.data_vars) == {"state"}
+    assert ds["state"].dims == ("target", "shot_idx")
+    exp.Contract.validate(ds)
 
 
 def test_the_nan_sentinel_becomes_nan(tmp_path, roster):
@@ -271,8 +302,8 @@ def test_the_nan_sentinel_becomes_nan(tmp_path, roster):
 
     ds = QbloxBackend._to_canonical(_raw(populations, protocol="ThresholdedAcquisition"), exp)
 
-    assert np.isnan(ds["state"].values[0, 2])
-    assert np.isfinite(ds["state"].values[0, [0, 1, 3]]).all()
+    assert np.isnan(ds["population"].values[0, 2])
+    assert np.isfinite(ds["population"].values[0, [0, 1, 3]]).all()
 
 
 def test_untresholded_raw_still_becomes_iq(tmp_path, roster):
