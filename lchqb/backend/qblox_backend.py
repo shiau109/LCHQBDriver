@@ -71,7 +71,7 @@ ATT_LIMITS_FILE = "att_limits.json"
 #: truncates to a ZERO-minute deadline. That is also why the error names
 #: minutes while this constant is in seconds.
 #:
-#: The binding case is ``qubit_parity_switch``, which is parameterized by RECORD
+#: The binding case is ``qubit_parity_switch_continuous``, which is parameterized by RECORD
 #: TIME and deliberately runs one long uninterrupted train of single shots. Its
 #: ceiling is Qblox's 3e6 acquisition bins: at chipA's 30.4 us shot that is 91 s
 #: of sequencer time, and 145 s at ``idle_multiple=3`` (~48.5 us). The old 120 s

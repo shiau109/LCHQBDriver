@@ -263,17 +263,19 @@ def test_thresholded_average_becomes_a_population_variable(tmp_path, roster):
 
 def test_thresholded_shot_sweep_keeps_the_state_variable(tmp_path, roster):
     """With a shot_idx sweep every thresholded value is one shot's OUTCOME, so the
-    variable stays `state` (the per-shot form) — qubit_parity_switch's telegraph."""
+    variable stays `state` (the per-shot form) — the parity monitors' telegraph."""
     from conftest import make_backend, make_experiment
 
     from lchqb.backend.qblox_backend import QbloxBackend
-    from lchqb.experiments.qubit_parity_switch import QbloxQubitParitySwitch
+    from lchqb.experiments.qubit_parity_switch_continuous import (
+        QbloxQubitParitySwitchContinuous,
+    )
 
     backend = make_backend(tmp_path, roster)
     exp = make_experiment(
-        QbloxQubitParitySwitch, backend, roster,
-        QbloxQubitParitySwitch.Parameters(targets=["q1"], num_shots=100,
-                                          use_state_discrimination=True))
+        QbloxQubitParitySwitchContinuous, backend, roster,
+        QbloxQubitParitySwitchContinuous.Parameters(
+            targets=["q1"], num_shots=100, use_state_discrimination=True))
     # define_sweep derives the fixed idle from the stored splitting and the shot
     # period from the depletion knob (the test_parity_switch fixture values).
     exp.device.channel("q1", "drive").parity_delta_f_hz = 250e3
@@ -286,6 +288,40 @@ def test_thresholded_shot_sweep_keeps_the_state_variable(tmp_path, roster):
 
     assert set(ds.data_vars) == {"state"}
     assert ds["state"].dims == ("target", "shot_idx")
+    exp.Contract.validate(ds)
+
+
+def test_thresholded_discrete_decode_keeps_state_with_meas_axis(tmp_path, roster):
+    """The discrete variant's two bins per cycle come back as flat labeled bins
+    (cycle-major, measurement-minor — the loop order); the decode must fold
+    them onto (shot_idx, meas_idx) and still land on per-shot `state`."""
+    from conftest import make_backend, make_experiment
+
+    from lchqb.backend.qblox_backend import QbloxBackend
+    from lchqb.experiments.qubit_parity_switch_discrete import (
+        QbloxQubitParitySwitchDiscrete,
+    )
+
+    backend = make_backend(tmp_path, roster)
+    exp = make_experiment(
+        QbloxQubitParitySwitchDiscrete, backend, roster,
+        QbloxQubitParitySwitchDiscrete.Parameters(
+            targets=["q1"], num_shots=100, use_state_discrimination=True))
+    exp.device.channel("q1", "drive").parity_delta_f_hz = 250e3
+    exp.device.channel("q1", "readout").readout_depletion_s = 795.77e-9
+    exp.sweep_axes = exp.define_sweep()
+    n = exp.sweep_axes["shot_idx"].size
+    assert exp.sweep_axes["meas_idx"].size == 2
+    # m1 alternates per cycle, m2 = NOT m1 -> flat (m1[0], m2[0], m1[1], ...)
+    m1 = (np.arange(n) % 2).astype(float)
+    flat = np.stack([m1, 1.0 - m1], axis=-1).ravel()
+
+    ds = QbloxBackend._to_canonical(_raw(flat, protocol="ThresholdedAcquisition"), exp)
+
+    assert set(ds.data_vars) == {"state"}
+    assert ds["state"].dims == ("target", "shot_idx", "meas_idx")
+    np.testing.assert_allclose(ds["state"].values[0, :, 0], m1)
+    np.testing.assert_allclose(ds["state"].values[0, :, 1], 1.0 - m1)
     exp.Contract.validate(ds)
 
 

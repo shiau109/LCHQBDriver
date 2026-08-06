@@ -1,4 +1,6 @@
-"""The Qblox parity monitor: what its schedule must and must NOT contain.
+"""The Qblox CONTINUOUS parity monitor: what its schedule must and must NOT
+contain. (The discrete sibling's schedule is covered by
+``test_parity_switch_discrete.py``, which reuses this file's helpers.)
 
 This probe is defined as much by its absences as by its pulses. Between shots
 it waits ONLY for resonator depletion — no ``Reset``, no ``ConditionalReset``,
@@ -22,24 +24,28 @@ pytest.importorskip("qblox_scheduler")
 
 from conftest import compile_probe, make_backend, make_experiment  # noqa: E402
 
-from lchqb.experiments.qubit_parity_switch import QbloxQubitParitySwitch  # noqa: E402
+from lchqb.experiments.qubit_parity_switch_continuous import (  # noqa: E402
+    QbloxQubitParitySwitchContinuous,
+)
 
 #: 250 kHz splitting -> idle = 1 / (2 x 250 kHz) = 2000 ns, already on grid.
 SPLITTING_HZ = 250e3
 IDLE_NS = 2000.0
-#: what resonator_spectroscopy proposes for a 1 MHz linewidth: 5 / (2 pi x 1e6).
+#: an arbitrary governed wait (the factor-5-era proposal for a 1 MHz linewidth,
+#: 5 / (2 pi x 1e6); the default depletion_factor is 10 now, but this is a
+#: fixture value, not a formula under test).
 DEPLETION_S = 795.77e-9
 
 ROTATION_RAD = -0.38962897776554817
 THRESHOLD = -3.25e-4
 
 
-def _experiment(tmp_path, roster, *, splitting=True, depletion=True,
-                discriminator=False, **params):
+def _experiment(tmp_path, roster, *, cls=QbloxQubitParitySwitchContinuous,
+                splitting=True, depletion=True, discriminator=False, **params):
     backend = make_backend(tmp_path, roster)
     exp = make_experiment(
-        QbloxQubitParitySwitch, backend, roster,
-        QbloxQubitParitySwitch.Parameters(targets=["q1"], num_shots=100, **params),
+        cls, backend, roster,
+        cls.Parameters(targets=["q1"], num_shots=100, **params),
     )
     readout = exp.device.channel("q1", "readout")
     readout.pos_g_i, readout.pos_g_q = 0.0, 0.0

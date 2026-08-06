@@ -1,4 +1,5 @@
-"""Qblox charge-parity monitor — supplies only ``probe()``.
+"""Qblox continuous charge-parity monitor — supplies only ``probe()``.
+(The two-measurement-per-cycle sibling is ``qubit_parity_switch_discrete``.)
 
 Y90 — fixed idle — X90 — Measure, repeated as one labeled shot loop: the same
 per-shot mechanism as ``single_shot_readout`` (the loop variable is CAPTURED
@@ -29,19 +30,38 @@ from __future__ import annotations
 from typing import Any
 
 from scqo import register
-from scqo.experiments import QubitParitySwitch
+from scqo.experiments import QubitParitySwitchContinuous
 from scqo.experiments._depletion import depletion_wait_ns
 
 from lchqb.experiments._state import measure_kwargs
 
 #: acquisition bins per sequencer (qblox_scheduler constants.MAX_NUMBER_OF_BINS).
-#: This is the one experiment whose shot count can realistically reach it, so it
-#: refuses by name rather than dying inside the compiler.
+#: The parity monitors are the experiments whose shot counts can realistically
+#: reach it, so they refuse by name rather than dying inside the compiler.
+#: (The discrete sibling imports this and counts TWO bins per cycle.)
 _MAX_ACQ_BINS = 3_000_000
 
 
+def _op_durations(experiment, target: str) -> tuple[float, float]:
+    """(readout_s, pi_s) off the vendor elements: the Measure's pulse +
+    acq-delay span and one pi/2 pulse duration. Shared by both parity
+    monitors' scheduled-period sums, so the two timebases cannot drift."""
+    from lchqb.experiments._vendor import vendor_element
+
+    element = vendor_element(experiment, target, "readout")
+    measure = element.measure
+    readout_s = float(measure.pulse_duration()
+                      if callable(measure.pulse_duration) else measure.pulse_duration)
+    acq_delay = getattr(measure, "acq_delay", 0.0)
+    readout_s += float(acq_delay() if callable(acq_delay) else acq_delay)
+
+    drive = vendor_element(experiment, target, "drive").rxy
+    pi_s = float(drive.duration() if callable(drive.duration) else drive.duration)
+    return readout_s, pi_s
+
+
 @register
-class QbloxQubitParitySwitch(QubitParitySwitch):
+class QbloxQubitParitySwitchContinuous(QubitParitySwitchContinuous):
     """Build a per-shot parity-monitor Schedule for a Qblox cluster."""
 
     def probe(self) -> Any:
@@ -104,16 +124,5 @@ class QbloxQubitParitySwitch(QubitParitySwitch):
         knob-only estimate when a probe does not report it), so it is measured
         off the same element the schedule above plays on.
         """
-        from lchqb.experiments._vendor import vendor_element
-
-        element = vendor_element(self, target, "readout")
-        measure = element.measure
-        readout_s = float(measure.pulse_duration()
-                          if callable(measure.pulse_duration) else measure.pulse_duration)
-        acq_delay = getattr(measure, "acq_delay", 0.0)
-        readout_s += float(acq_delay() if callable(acq_delay) else acq_delay)
-
-        drive = vendor_element(self, target, "drive").rxy
-        pi_s = float(drive.duration() if callable(drive.duration) else drive.duration)
-
+        readout_s, pi_s = _op_durations(self, target)
         return (idle_ns + depletion_ns) * 1e-9 + readout_s + 2.0 * pi_s

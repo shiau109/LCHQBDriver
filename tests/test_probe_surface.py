@@ -80,8 +80,8 @@ def test_probe_compiles(tmp_path, roster, name):
     readout = exp.device.channel("q1", "readout")
     readout.pos_g_i, readout.pos_g_q = 0.0, 0.0
     readout.pos_e_i, readout.pos_e_q = 4.0, 0.0
-    # qubit_parity_switch derives its fixed idle from the drive channel's stored
-    # beat splitting and refuses without a GOVERNED depletion wait (its shot
+    # the parity monitors derive their fixed idle from the drive channel's stored
+    # beat splitting and refuse without a GOVERNED depletion wait (their shot
     # cadence is the telegraph timebase). Both harmless to every other probe.
     exp.device.channel("q1", "drive").parity_delta_f_hz = 250e3
     readout.readout_depletion_s = 1e-6
