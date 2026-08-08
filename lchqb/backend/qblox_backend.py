@@ -59,10 +59,9 @@ _DEFAULT_MAX_OUTPUT_ATT = 60
 _UNIVERSALLY_SAFE_ATT = 20
 #: Sidecar holding the discovered per-output maxima, beside mixer_cal.json.
 ATT_LIMITS_FILE = "att_limits.json"
-#: How long to wait for the sequencers to stop, in SECONDS (the unit
-#: ``HardwareAgent.run`` takes; its own default is 10 s). This is wall clock for
-#: the whole acquisition, so it must exceed the longest schedule any experiment
-#: can legally ask for — not a typical one.
+#: FLOOR for the run timeout, in SECONDS (the unit ``HardwareAgent.run`` takes;
+#: its own default is 10 s). The actual deadline is computed per experiment by
+#: ``_run_timeout_s`` and never goes below this.
 #:
 #: KEEP THIS A MULTIPLE OF 60. The seconds only look like seconds: the
 #: instrument coordinator hands the cluster ``timeout_sec // 60`` MINUTES
@@ -71,17 +70,73 @@ ATT_LIMITS_FILE = "att_limits.json"
 #: truncates to a ZERO-minute deadline. That is also why the error names
 #: minutes while this constant is in seconds.
 #:
-#: The binding case is ``qubit_parity_switch_continuous``, which is parameterized by RECORD
-#: TIME and deliberately runs one long uninterrupted train of single shots. Its
-#: ceiling is Qblox's 3e6 acquisition bins: at chipA's 30.4 us shot that is 91 s
-#: of sequencer time, and 145 s at ``idle_multiple=3`` (~48.5 us). The old 120 s
-#: sat right inside that band and killed a 30 s-record run on 2026-08-01
-#: ("Sequencers slot 4 sequencer 0 did not stop in timeout period of 2
-#: minutes"). 300 s clears the bin-limited maximum about 2x over.
-#:
-#: A fixed number is honest here precisely BECAUSE the bin ceiling bounds the
-#: schedule — this is not a guess that a longer run could quietly outgrow.
+#: Why 300: the parity monitors are parameterized by RECORD TIME and play one
+#: long uninterrupted train of single shots, bounded by Qblox's 3e6 acquisition
+#: bins — ~145 s of sequencer time at chipA's ``idle_multiple=3`` shot. The old
+#: fixed 120 s sat inside that band and killed a 30 s-record run on 2026-08-01;
+#: 300 s clears the bin-limited maximum about 2x over. A FIXED number was
+#: defended on the grounds that the bin ceiling bounds every schedule — false
+#: for FPGA-averaged sweeps, whose num_averages x sweep points x thermalization
+#: is unbounded and killed long runs a second time (issue #24). Hence the
+#: per-experiment scaling; this constant survives only as the proven-safe floor.
 _RUN_TIMEOUT_S = 300
+
+
+def _max_thermalization_s(experiment: "Experiment") -> float:
+    """The longest per-shot thermal wait across the experiment's targets — 0.0
+    for targets without a readable drive channel (pairs, unseeded knobs); the
+    caller's sequence margin keeps the estimate nonzero regardless."""
+    worst = 0.0
+    for target in getattr(experiment.params, "targets", None) or []:
+        try:
+            chan = experiment.device.channel(target, "drive")
+            worst = max(worst, float(chan.thermalization_time_s))
+        except Exception:
+            continue
+    return worst
+
+
+def _run_timeout_s(experiment: "Experiment") -> int:
+    """Wall-clock deadline for ``HardwareAgent.run``, scaled to the experiment.
+
+    A fixed number was outgrown twice (120 s by a 30 s parity record, 300 s by
+    long averaged sweeps — issue #24), so the deadline is estimated from the
+    experiment itself and floored at ``_RUN_TIMEOUT_S``:
+
+    - the parity monitors publish their EXACT per-shot period during ``probe()``
+      (``probe_shot_period_s``), so shots x the slowest period IS the run;
+    - everything else is repetitions x sweep points x (thermalization + a 1 ms
+      margin for the played sequence and ms-scale swept idles);
+    - anything unestimable falls back to the floor.
+
+    The estimate is doubled (arming, transfers, serialization are not in the
+    product), then rounded UP to a whole minute — the vendor's ``// 60`` floor
+    division would silently drop a fractional minute. Call it AFTER ``probe()``:
+    the shot periods only exist once the probe has resolved them.
+    """
+    est = 0.0
+    try:
+        periods = getattr(experiment, "probe_shot_period_s", None) or {}
+        if periods:
+            shots = getattr(experiment, "resolved_num_shots", None)
+            shots = shots() if callable(shots) else experiment.params.num_shots
+            est = float(shots) * max(periods.values())
+        else:
+            params = experiment.params
+            reps = (getattr(params, "num_averages", None)
+                    or getattr(params, "num_shots", None))
+            if reps:
+                axes = getattr(experiment, "sweep_axes", None) or experiment.define_sweep()
+                points = 1
+                for name, values in axes.items():
+                    # shot_idx repeats what `reps` already counts
+                    if name != "shot_idx":
+                        points *= max(1, len(values))
+                est = float(reps) * points * (_max_thermalization_s(experiment) + 1e-3)
+    except Exception:
+        est = 0.0
+    seconds = max(float(_RUN_TIMEOUT_S), 2.0 * est)
+    return int(math.ceil(seconds / 60.0)) * 60
 
 
 def _solve_att(name: str, target: float, what: str,
@@ -1259,8 +1314,13 @@ class QbloxBackend(Backend):
         self._sync_att_limits()
         with self._thermalization_override(experiment):
             schedule = experiment.probe()  # native qblox_scheduler.Schedule
+            timeout_s = _run_timeout_s(experiment)  # after probe(): needs the shot periods
+            # retrieve_acquisition() re-waits against the coordinator's OWN
+            # timeout parameter (default 60 s) — keep that second gate no
+            # tighter than the first.
+            self._hw_agent.instrument_coordinator.timeout(timeout_s)
             try:
-                raw = self._hw_agent.run(schedule, timeout=_RUN_TIMEOUT_S)
+                raw = self._hw_agent.run(schedule, timeout=timeout_s)
             finally:
                 # The clusters only exist once run() has connected them, and the loops
                 # this quiets are the ones qblox_instruments leaves open until

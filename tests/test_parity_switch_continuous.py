@@ -184,16 +184,17 @@ def test_too_many_shots_refused_by_name(tmp_path, roster):
 
 
 class TestAcquisitionTimeout:
-    """The wall-clock ceiling on a run, which this experiment is the binding
-    case for: it is parameterized by RECORD TIME and plays one long
-    uninterrupted train of single shots, so its schedule is the longest any
-    experiment can legally ask the cluster for.
+    """The wall-clock deadline on a run: computed per experiment by
+    ``_run_timeout_s`` (issue #24 — a fixed number was outgrown twice), with
+    ``_RUN_TIMEOUT_S`` surviving as the proven-safe FLOOR. This experiment is
+    the floor's binding case: parameterized by RECORD TIME, one long
+    uninterrupted train of single shots, bounded by the acquisition-bin ceiling.
     """
 
-    def test_covers_the_longest_bin_limited_record(self):
+    def test_floor_covers_the_longest_bin_limited_record(self):
         """3e6 acquisition bins at chipA's ~48.5 us shot (idle_multiple=3) is
-        ~145 s of sequencer time — the most this experiment can ever request,
-        because the bin ceiling bounds it. The timeout must clear that."""
+        ~145 s of sequencer time — the most this experiment can ever request.
+        The floor must clear that even when the estimate is unavailable."""
         from lchqb.backend.qblox_backend import _RUN_TIMEOUT_S
 
         longest_run_s = 3_000_000 * 48.5e-6
@@ -201,7 +202,7 @@ class TestAcquisitionTimeout:
         # ...and the old 120 s did NOT, which is what killed a 30 s-record run
         assert 120 < longest_run_s
 
-    def test_is_a_whole_number_of_minutes(self):
+    def test_floor_is_a_whole_number_of_minutes(self):
         """The seconds only look like seconds: the instrument coordinator hands
         the cluster ``timeout_sec // 60`` MINUTES, floor division. A value that
         is not a multiple of 60 silently loses the remainder, and anything under
@@ -209,4 +210,92 @@ class TestAcquisitionTimeout:
         from lchqb.backend.qblox_backend import _RUN_TIMEOUT_S
 
         assert _RUN_TIMEOUT_S % 60 == 0
-        assert _RUN_TIMEOUT_S // 60 == 5      # the 5 minutes actually enforced
+        assert _RUN_TIMEOUT_S >= 300  # never below the proven-safe 5 minutes
+
+    def test_parity_period_scales_the_deadline(self):
+        """The parity monitors publish their exact shot period during probe();
+        shots x the slowest period, doubled and rounded up to a minute."""
+        from types import SimpleNamespace
+
+        from lchqb.backend.qblox_backend import _run_timeout_s
+
+        exp = SimpleNamespace(
+            probe_shot_period_s={"q1": 100e-6, "q2": 80e-6},
+            resolved_num_shots=lambda: 3_000_000,
+            params=SimpleNamespace(targets=["q1", "q2"]),
+        )
+        # 3e6 x 100us = 300 s of sequencer time -> x2 = 600 s
+        assert _run_timeout_s(exp) == 600
+
+    def test_generic_sweep_scales_the_deadline(self):
+        """The issue #24 shape: num_averages x sweep points x thermalization has
+        no bin ceiling and outgrew the old fixed 300 s (e.g. 100 points x 4000
+        averages x 1.86 ms is ~744 s of wall clock)."""
+        import numpy as np
+        from types import SimpleNamespace
+
+        from lchqb.backend.qblox_backend import _run_timeout_s
+
+        chan = SimpleNamespace(thermalization_time_s=1.86e-3)
+        exp = SimpleNamespace(
+            params=SimpleNamespace(targets=["q1"], num_averages=4000),
+            device=SimpleNamespace(channel=lambda t, kind: chan),
+            sweep_axes={"detuning_hz": np.arange(100)},
+        )
+        t = _run_timeout_s(exp)
+        # 4000 x 100 x (1.86 ms + 1 ms margin) x 2 safety = 2288 s, up-rounded
+        assert t >= 2 * 4000 * 100 * 1.86e-3
+        assert t % 60 == 0
+
+    def test_unestimable_falls_back_to_the_floor(self):
+        """No shot periods, no repetition count -> the floor, never a crash: a
+        wrong timeout estimate must never be the thing that kills a run."""
+        from types import SimpleNamespace
+
+        from lchqb.backend.qblox_backend import _RUN_TIMEOUT_S, _run_timeout_s
+
+        assert _run_timeout_s(SimpleNamespace(params=SimpleNamespace())) == _RUN_TIMEOUT_S
+        assert _run_timeout_s(SimpleNamespace(params=None)) == _RUN_TIMEOUT_S
+
+    def test_short_estimates_stay_on_the_floor(self):
+        """A quick experiment must not LOWER the deadline below the floor."""
+        from types import SimpleNamespace
+
+        from lchqb.backend.qblox_backend import _RUN_TIMEOUT_S, _run_timeout_s
+
+        chan = SimpleNamespace(thermalization_time_s=200e-6)
+        exp = SimpleNamespace(
+            params=SimpleNamespace(targets=["q1"], num_averages=100),
+            device=SimpleNamespace(channel=lambda t, kind: chan),
+            sweep_axes={"amp_prefactor": [0.9, 1.0, 1.1]},
+        )
+        assert _run_timeout_s(exp) == _RUN_TIMEOUT_S
+
+    def test_acquire_wires_the_computed_deadline(self, tmp_path, roster, monkeypatch):
+        """acquire() hands the computed value to HardwareAgent.run AND mirrors
+        it onto the instrument coordinator's own timeout parameter — the second
+        gate ``retrieve_acquisition()`` re-waits against (vendor default 60 s)."""
+        pytest.importorskip("qblox_scheduler")
+        from conftest import make_backend, make_experiment
+        from scqo.experiments import get
+
+        from lchqb.backend.qblox_backend import QbloxBackend
+
+        backend = make_backend(tmp_path, roster)
+        cls = get("resonator_spectroscopy")
+        exp = make_experiment(cls, backend, roster,
+                              cls.Parameters(targets=["q1"], num_points=5))
+        exp.sweep_axes = exp.define_sweep()
+
+        seen = {}
+
+        def fake_run(schedule, timeout=None):
+            seen["timeout"] = timeout
+            return object()
+
+        monkeypatch.setattr(backend._hw_agent, "run", fake_run)
+        monkeypatch.setattr(QbloxBackend, "_to_canonical",
+                            staticmethod(lambda raw, experiment: raw))
+        backend.acquire(exp)
+        assert seen["timeout"] >= 300 and seen["timeout"] % 60 == 0
+        assert backend._hw_agent.instrument_coordinator.timeout() == seen["timeout"]
