@@ -4,8 +4,10 @@ The feature spans four places that must agree, and three of the four fail SILENT
 if they disagree:
 
 * the two knobs (`readout_rotation_rad` / `readout_threshold`) must land on
-  `element.measure.acq_rotation` / `acq_threshold`, with the rad->deg conversion —
-  a missed conversion is a factor of 57 in the rotation and just gives a bad fit;
+  `element.measure.acq_rotation` / `acq_threshold`, with the rad->deg conversion
+  AND the sign flip (the vendors are opposite-handed) — a missed conversion is a
+  factor of 57 in the rotation, a missed flip mirrors the frame (chipA 2026-08-08:
+  every shot classified |g>), and either just gives a bad fit;
 * the probes must ask for `ThresholdedAcquisition`;
 * `_to_canonical` must emit `state`, not `I`/`Q` — a thresholded result is REAL, so
   the old unpack would put the population in `I`, leave `Q` at zero, and still pass
@@ -95,15 +97,17 @@ def _experiment(tmp_path, roster, name, *, use_state):
 # --------------------------------------------------------------- the two knobs
 
 def test_rotation_is_stored_in_degrees_on_the_element(tmp_path, roster):
-    """The neutral field is radians; the vendor knob is degrees. The conversion
-    lives at this one boundary — QM's integration_weights_angle is radians, so
-    without it the same `scqo set` means two different rotations per backend."""
+    """The neutral field is radians in QM's integration_weights_angle convention;
+    the vendor knob is degrees the OTHER way round (acq_rotation turns the data
+    counterclockwise, a QM weights angle turns it clockwise). The conversion AND
+    the negation live at this one boundary — without both, the same `scqo set`
+    means two different rotations per backend."""
     backend = make_backend(tmp_path, roster)
     view = backend.device.component("q1_ro")
 
     view.readout_rotation_rad = math.pi / 4
     element = backend.device.component("q1_ro")._element
-    assert float(element.measure.acq_rotation) == pytest.approx(45.0)
+    assert float(element.measure.acq_rotation) == pytest.approx(315.0)
     assert view.readout_rotation_rad == pytest.approx(math.pi / 4)
 
 
@@ -521,6 +525,47 @@ def test_the_chipA_runaway_cannot_return(tmp_path, roster):
     # standing rotation away from the truth, which is the whole bug
     accumulated = CHIPA_STANDING_ROTATION + proposed
     assert abs(proposed - accumulated) > 1.0
+
+
+# ------------------------------------------- the vendor's rotation handedness
+
+#: the |g>/|e> centres run 20260808-123042-526-chipA-single_shot_readout-01
+#: actually measured (its accepted pos_* suggestions). The solved angle here is
+#: ~2.15 rad — large enough that a mirrored rotation moves BOTH centres to the
+#: same side of the threshold, which is how the sign bug surfaced: the
+#: discriminated qubit_relaxation 20260808-123326-971 read ~0 population at
+#: every wait while its averaged twin 20260808-123214-853 fitted T1 = 273 us.
+#: (The 2026-07 validation angle was only -0.39 rad, where the mirror costs
+#: fidelity but keeps the centres on opposite sides — a silent pass.)
+CHIPA_0808_G = (1.4181183459582142e-04, -3.570687705820789e-06)
+CHIPA_0808_E = (-1.0898111433014777e-04, 3.787100019975846e-04)
+
+
+def test_the_element_rotation_is_the_vendors_handedness(tmp_path, roster):
+    """The number pushed to acq_rotation must work under the VENDOR's convention,
+    not the view's inverse of it. Per the qblox_scheduler acquisitions tutorial,
+    acq_rotation turns the threshold line CLOCKWISE, so the sequencer's decision
+    value for a shot z = I + iQ is Re(z * exp(+i*radians(acq_rotation))) — the
+    data turned counterclockwise (cal16 writes degrees(mod(-angle(e-g), 2pi))
+    straight to the knob). Model the hardware exactly that way, straight off the
+    ELEMENT, and |e> must land above acq_threshold with |g> below it. The view's
+    own read-back cannot stand in for this check: it inverts whatever the setter
+    did, so it round-trips equally well with BOTH signs."""
+    backend, exp = _ssro_on_blobs(tmp_path, roster, CHIPA_0808_G, CHIPA_0808_E)
+    exp.update()
+
+    element = backend.device.component("q1_ro")._element
+    theta = math.radians(float(element.measure.acq_rotation))
+    threshold = float(element.measure.acq_threshold)
+
+    def decision(centre):
+        return centre[0] * math.cos(theta) - centre[1] * math.sin(theta)
+
+    assert decision(CHIPA_0808_E) > threshold > decision(CHIPA_0808_G), (
+        f"acq_rotation={math.degrees(theta):.2f} deg puts the centres at "
+        f"g={decision(CHIPA_0808_G):.3g}, e={decision(CHIPA_0808_E):.3g} against "
+        f"acq_threshold={threshold:.3g} under the vendor's clockwise-threshold-"
+        f"line convention — the 2026-08-08 sign bug (every shot classified |g>)")
 
 
 def test_rotation_round_trip_is_a_fixed_point(tmp_path, roster):

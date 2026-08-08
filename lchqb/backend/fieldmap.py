@@ -115,11 +115,14 @@ FIELD_BINDINGS: dict[str, dict[str, VendorBinding]] = {
                  "(ns, 4 ns grid)"),
         "readout_rotation_rad": VendorBinding(
             path="element.measure.acq_rotation", unit="deg",
-            convert="RADIANS -> DEGREES (the vendor knob is degrees; the neutral "
-                    "field is radians, matching QM's integration_weights_angle). "
-                    "The ABSOLUTE demod rotation, not a delta: single_shot_readout "
-                    "proposes current - measured_delta - so a direct edit silently "
-                    "de-calibrates it; governed write: "
+            convert="RADIANS -> DEGREES and NEGATED (the vendor knob is degrees "
+                    "and opposite-handed: acq_rotation turns the data "
+                    "counterclockwise - 'threshold line clockwise' per the vendor "
+                    "tutorial - while the neutral field keeps QM's "
+                    "integration_weights_angle convention, which turns it "
+                    "clockwise). The ABSOLUTE demod rotation, not a delta: "
+                    "single_shot_readout proposes -measured_delta - so a direct "
+                    "edit silently de-calibrates it; governed write: "
                     "scqo set QUBIT.readout_rotation_rad=...",
             note="acquisition IQ frame, chain-dependent (invalidated by an "
                  "input-chain change such as readout_input_att); non-portable. "

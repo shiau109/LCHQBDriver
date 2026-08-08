@@ -422,11 +422,19 @@ class QbloxReadoutChannel(_QbloxChannelView, make_view_base("readout")):
     # the element (they are `measure` factory kwargs), so a probe only has to ask
     # for acq_protocol="ThresholdedAcquisition" — see experiments/_state.py.
     #
-    # The vendor knob is DEGREES; the neutral field is RADIANS (QM's
-    # integration_weights_angle is radians, and the catalog names the field
-    # readout_rotation_rad). Converting here, at the one boundary, is what keeps
-    # `scqo set q1_ro.readout_rotation_rad=...` meaning the same thing on both
-    # backends. The threshold needs no conversion — see fieldmap.
+    # The vendor knob is DEGREES and OPPOSITE-HANDED; the neutral field is RADIANS
+    # in QM's integration_weights_angle convention (the catalog names the field
+    # readout_rotation_rad). Qblox's acq_rotation "rotates the threshold line
+    # clockwise" (qblox_scheduler acquisitions tutorial), i.e. the sequencer's
+    # decision value is Re(z * e^{+i*theta}) — the DATA turned counterclockwise —
+    # while a QM weights angle turns the data clockwise. So this boundary NEGATES
+    # as well as converts; both together are what keep
+    # `scqo set q1_ro.readout_rotation_rad=...` meaning the same rotation on both
+    # backends. Missing the negation is not a fit-quality nit: chipA 2026-08-08
+    # calibrated at 2.15 rad and the mirrored rotation put BOTH blob centres below
+    # acq_threshold, so a discriminated qubit_relaxation read ~0 population at
+    # every wait (run 20260808-123326-971). The threshold needs no conversion —
+    # it lives in the rotated frame, which both conventions agree on — see fieldmap.
     #: decimals the radian read-back is quantized to. `radians(degrees(x))` is not
     #: exactly `x`, and RecordingDevice._sync_coupled compares vendor read-back to
     #: its cached config with EXACT float equality (deliberately — that strictness
@@ -445,14 +453,14 @@ class QbloxReadoutChannel(_QbloxChannelView, make_view_base("readout")):
     # any real the caller writes is legal and reads back as its equivalent angle.
     @property
     def readout_rotation_rad(self) -> float:
-        rad = math.radians(float(_read(self._element.measure, "acq_rotation")) % 360.0)
-        if rad > math.pi:
-            rad -= 2.0 * math.pi
+        rad = -math.radians(float(_read(self._element.measure, "acq_rotation")) % 360.0)
+        if rad <= -math.pi:
+            rad += 2.0 * math.pi
         return round(rad, self._ROTATION_DECIMALS)
 
     @readout_rotation_rad.setter
     def readout_rotation_rad(self, value: float) -> None:
-        deg = math.degrees(round(float(value), self._ROTATION_DECIMALS)) % 360.0
+        deg = -math.degrees(round(float(value), self._ROTATION_DECIMALS)) % 360.0
         _write(self._element.measure, "acq_rotation", deg)
 
     @property

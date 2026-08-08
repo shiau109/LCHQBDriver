@@ -109,11 +109,15 @@ Everything else (parameters, fitting, writeback, simulation) is inherited from `
   `measure.integration_time`: both positive multiples of 4 ns (REFUSED otherwise),
   window ≤ pulse (QM-portability contract — the hardware here would allow more),
   and a pulse shrink clamps the window down with it.
-- `readout_rotation_rad` ↔ `measure.acq_rotation` (**radians ↔ DEGREES**, converted
-  in the view — QM's `integration_weights_angle` is radians, and one `scqo set` must
-  mean the same rotation on both backends) and **FOLDED**: the sequencer takes
-  degrees in [0, 360] and refuses anything outside, while the neutral field keeps
-  (−π, π], so both directions wrap; `readout_threshold` ↔ `measure.acq_threshold`,
+- `readout_rotation_rad` ↔ `measure.acq_rotation` (**radians ↔ DEGREES and
+  NEGATED**, both in the view — the vendors are opposite-handed: `acq_rotation`
+  turns the data counterclockwise ("threshold line clockwise", vendor tutorial;
+  cal16 writes `degrees(mod(-angle(e-g), 2π))` directly), while the neutral field
+  keeps QM's `integration_weights_angle` convention, which turns it clockwise —
+  and one `scqo set` must mean the same rotation on both backends; the missed
+  negation mirrored the frame and classified every chipA shot |g>, 2026-08-08)
+  and **FOLDED**: the sequencer takes degrees in [0, 360] and refuses anything
+  outside, while the neutral field keeps (−π, π], so both directions wrap; `readout_threshold` ↔ `measure.acq_threshold`,
   unconverted (same normalized frame the probes acquire in) and unfolded (its
   limits are ±1.7e7, which a real threshold never approaches).
   These two arm `use_state_discrimination` on the four coherent-drive probes:
