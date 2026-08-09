@@ -1,0 +1,64 @@
+"""``QbloxBackend.preview``: compiled-schedule artifacts, fully offline.
+
+The contract (scqo ``Backend.preview`` hook): the caller has set
+``exp.sweep_axes``; the backend compiles exactly as ``HardwareAgent.run``
+would and renders ``pulse_diagram.html`` + ``timing_table.html`` — both need
+the compiled timeline, both are mandatory. No gate-level circuit diagram by
+design (the vendor renderer cannot draw hardware-loop swept schedules — see
+the preview() docstring). No cluster call is allowed anywhere on this path.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+pytest.importorskip("qblox_scheduler")
+
+from conftest import make_backend, make_experiment  # noqa: E402
+
+import lchqb.experiments  # noqa: E402,F401  (import side effect: @register)
+from scqo.experiments import get  # noqa: E402
+
+
+def _ramsey(tmp_path, roster):
+    cls = get("qubit_ramsey")
+    backend = make_backend(tmp_path, roster)
+    exp = make_experiment(cls, backend, roster,
+                          cls.Parameters(targets=["q1"], num_points=5,
+                                         num_averages=2))
+    exp.sweep_axes = exp.define_sweep()  # the Session's job before the hook
+    return backend, exp
+
+
+def test_preview_writes_both_artifacts_offline(tmp_path, roster):
+    backend, exp = _ramsey(tmp_path, roster)
+    out_dir = tmp_path / "prev"
+    files = backend.preview(exp, out_dir)
+    assert [f.name for f in files] == ["pulse_diagram.html",
+                                       "timing_table.html"]
+    for f in files:
+        assert f.parent == out_dir
+        assert f.is_file() and f.stat().st_size > 0
+
+
+def test_preview_never_touches_the_network(tmp_path, roster, monkeypatch):
+    """acquire() syncs attenuator ceilings off the cluster before probing;
+    preview must not (offline by contract, and _sync_att_limits can also
+    write att_limits.json)."""
+    backend, exp = _ramsey(tmp_path, roster)
+    monkeypatch.setattr(
+        backend, "_sync_att_limits",
+        lambda: pytest.fail("preview called _sync_att_limits (network)"))
+    files = backend.preview(exp, tmp_path / "prev")
+    assert files  # rendered without any cluster interaction
+
+
+def test_preview_overwrites_a_pinned_out_dir(tmp_path, roster):
+    """`scqo run ... --preview --out DIR` reuses one folder: a second render
+    into the same directory must succeed in place, not refuse."""
+    backend, exp = _ramsey(tmp_path, roster)
+    out_dir = tmp_path / "pinned"
+    first = backend.preview(exp, out_dir)
+    second = backend.preview(exp, out_dir)
+    assert [f.name for f in first] == [f.name for f in second]
+    assert all(f.is_file() for f in second)

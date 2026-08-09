@@ -1331,6 +1331,50 @@ class QbloxBackend(Backend):
                 silence_proactor_self_pipe_noise(self._hw_agent)
         return self._to_canonical(raw, experiment)
 
+    def preview(self, experiment: "Experiment", out_dir: Path) -> list[Path]:
+        """Render the COMPILED schedule to files — no cluster, nothing saved.
+
+        The scqo ``Backend.preview`` hook (``Session.preview`` /
+        ``scqo run <name> --preview``): the same construction slice as
+        ``acquire()`` minus the instrument — the reset backstop, the
+        thermalization bracket around probe()+compile (the wait is baked in
+        at build/compile time), and the exact ``hardware_config`` mutation
+        ``HardwareAgent.run`` performs. It must NEVER call
+        ``_sync_att_limits`` (a network call that can also write
+        att_limits.json — preview stays fully offline). Both artifacts need
+        the compiled timeline: ``plot_pulse_diagram``/``timing_table``
+        require absolute timing, so compilation is mandatory, and a failure
+        in either fails the preview — they ARE the product. No gate-level
+        ``circuit_diagram`` on purpose: the vendor's circuit renderer cannot
+        draw a hardware-loop swept schedule (uncompiled it dies comparing a
+        symbolic duration, compiled it dies in ``_draw_loop`` — measured
+        2026-08-09), and every registered probe sweeps. Under
+        ``reset_method="active"`` compilation unrolls the averaging loop in
+        Python (~14 s at 4000 averages) and preview pays it.
+        """
+        from lchqb.experiments._reset import check_reset_method
+
+        check_reset_method(experiment)
+        with self._thermalization_override(experiment):
+            schedule = experiment.probe()  # native qblox_scheduler.Schedule
+            from qblox_scheduler.backends.graph_compilation import SerialCompiler
+
+            qd = self._hw_agent.quantum_device
+            # the same mutation HardwareAgent.run performs before compiling
+            qd.hardware_config = self._hw_agent.hardware_configuration
+            compiled = SerialCompiler().compile(
+                schedule=schedule, config=qd.generate_compilation_config())
+
+        out_dir.mkdir(parents=True, exist_ok=True)
+        pulse_html = out_dir / "pulse_diagram.html"
+        pulse_fig = compiled.plot_pulse_diagram(plot_backend="plotly")
+        pulse_fig.write_html(str(pulse_html))
+
+        timing_html = out_dir / "timing_table.html"
+        timing_html.write_text(compiled.timing_table.to_html(),
+                               encoding="utf-8")
+        return [pulse_html, timing_html]
+
     @staticmethod
     def _to_canonical(raw: xr.Dataset, experiment: "Experiment") -> xr.Dataset:
         """Relabel a raw Qblox dataset into scqo's convention: dims (target, <sweep>),

@@ -259,6 +259,14 @@ Everything else (parameters, fitting, writeback, simulation) is inherited from `
   Python loop (one 1D detuning scan per point); `resonator_spectroscopy_power_amp` is a
   single-program FPGA sweep over Python-UNROLLED geometric amplitude blocks, giving a
   uniform-dBm axis.
+- **Sequence preview** (`scqo run <name> --preview` → `QbloxBackend.preview`): compiles
+  the probe's Schedule OFFLINE (the same `hardware_config` mutation + SerialCompiler call
+  `HardwareAgent.run` makes) and writes `pulse_diagram.html` (plotly) +
+  `timing_table.html` — both MANDATORY, both need the compiled timeline. It must never
+  call `_sync_att_limits` (network + att_limits.json write; test-pinned). No gate-level
+  circuit diagram on purpose: the vendor renderer cannot draw hardware-loop swept
+  schedules (dies uncompiled AND compiled, measured 2026-08-09), and every registered
+  probe sweeps. Active reset makes preview pay the compile-time loop unrolling.
 
 ## Tests
 `tests/conftest.py` holds the shared fixture chip — a schema-3 roster for the demo
@@ -306,4 +314,5 @@ back up before you commit. Below ~10 s there is nothing left to win here; don't 
 | `test_hw_config_serialization.py` | explicit nulls never written or trusted |
 | `test_mixer_calibration.py` | `scripts/calibrate_mixers.py`: the pure plan (config -> LO/NCO groups) + the AMC control flow on a `dummy_cfg` cluster (channel map, tone, sequencer snapshot/restart, cache) |
 | `test_asyncio_noise.py` | the WinError-87 shutdown suppressor: what it swallows, what it must NOT, idempotence, and that `acquire()` installs it even when the run raises |
+| `test_preview.py` | `QbloxBackend.preview`: both compiled artifacts render offline, no `_sync_att_limits` call, pinned `--out` dir overwrites in place |
 | `test_scqo_glue.py` | the `scqo` CLI works in THIS venv + the qblox factory (slow — see above) |
