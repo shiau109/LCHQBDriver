@@ -2,7 +2,7 @@
 
 Importing this package is lightweight and does NOT import qblox_scheduler; the vendor
 library is imported lazily inside the backend / each experiment's probe(). Import
-``lchqb.experiments`` to populate the scqo experiment registry.
+``scqo_qblox.experiments`` to populate the scqo experiment registry.
 """
 
 __all__ = ["backend", "experiments"]

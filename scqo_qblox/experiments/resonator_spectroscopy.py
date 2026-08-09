@@ -2,7 +2,7 @@
 
 Parameters, fitting, device writeback and the simulator are all inherited from
 ``scqo.experiments.ResonatorSpectroscopy``. ``qblox_scheduler`` is imported inside
-``probe()`` so the simulated path (and ``import lchqb``) needs no Qblox install.
+``probe()`` so the simulated path (and ``import scqo_qblox``) needs no Qblox install.
 """
 
 from __future__ import annotations

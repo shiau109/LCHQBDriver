@@ -29,7 +29,7 @@ pytest.importorskip("qblox_scheduler")
 
 from conftest import compile_probe, make_backend, make_experiment  # noqa: E402
 
-from lchqb.experiments.qubit_ramsey import QbloxQubitRamsey  # noqa: E402
+from scqo_qblox.experiments.qubit_ramsey import QbloxQubitRamsey  # noqa: E402
 
 #: a calibrated discriminator, needed only by the active-reset shape
 ROTATION_RAD = -0.38962897776554817

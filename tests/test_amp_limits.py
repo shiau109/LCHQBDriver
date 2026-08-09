@@ -11,7 +11,7 @@ the failure can name the knob the operator actually set.
 import numpy as np
 import pytest
 
-from lchqb.experiments._amp import MAX_DAC_FRACTION, check_amp_window
+from scqo_qblox.experiments._amp_limits import MAX_DAC_FRACTION, check_amp_window
 
 
 def test_a_window_inside_the_dac_returns_the_absolute_amps():

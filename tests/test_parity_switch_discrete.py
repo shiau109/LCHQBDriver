@@ -30,7 +30,7 @@ from test_parity_switch_continuous import (  # noqa: E402
     _leaves,
 )
 
-from lchqb.experiments.qubit_parity_switch_discrete import (  # noqa: E402
+from scqo_qblox.experiments.qubit_parity_switch_discrete import (  # noqa: E402
     QbloxQubitParitySwitchDiscrete,
 )
 

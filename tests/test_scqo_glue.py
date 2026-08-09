@@ -98,7 +98,7 @@ def test_field_catalog_matches_implementation():
 
     from scqo.catalog import ALL_STATIC_FIELDS, CHANNELS
 
-    from lchqb.backend import fieldmap
+    from scqo_qblox.backend import fieldmap
 
     assert set(fieldmap.FIELD_BINDINGS) == SERVED_KINDS
     assert set(fieldmap.UNREALIZED) <= SERVED_KINDS
@@ -142,7 +142,7 @@ def test_field_catalog_matches_implementation():
 
     # the backend class serves exactly the declared catalog (methods are pure),
     # and it serves a view class for exactly the kinds the catalog declares
-    from lchqb.backend.qblox_backend import _CHANNEL_VIEWS, QbloxBackend
+    from scqo_qblox.backend.qblox_backend import _CHANNEL_VIEWS, QbloxBackend
 
     assert QbloxBackend.field_bindings(None) == fieldmap.FIELD_BINDINGS
     assert QbloxBackend.unrealized(None) == fieldmap.UNREALIZED
@@ -212,7 +212,7 @@ def test_real_fixture_dut_config_parses(tmp_path):
         pytest.skip("SCQO checkout with demo_instr_config not found side-by-side")
     shutil.copy(src, tmp_path / "dut_config.json")
 
-    import lchqb.elements  # noqa: F401  register custom element types
+    import scqo_qblox.elements  # noqa: F401  register custom element types
     from qblox_scheduler import QuantumDevice
 
     device = QuantumDevice.from_json_file(str(tmp_path / "dut_config.json"))

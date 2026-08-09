@@ -1,6 +1,6 @@
 """Qblox backend: maps the scqo abstractions onto qblox_scheduler.
 
-``qblox_scheduler`` is imported lazily (inside methods) so that ``import lchqb`` works
+``qblox_scheduler`` is imported lazily (inside methods) so that ``import scqo_qblox`` works
 without the Qblox stack installed, and so the simulated path never needs it.
 
 Since the greenfield model a driver serves a view PER CHANNEL ENTITY, not per
@@ -9,7 +9,7 @@ function's knobs, and all three resolve onto the SAME qblox_scheduler
 ``DeviceElement`` (the channel's single target). ``QbloxDeviceModel.component``
 does that resolution through the roster — never by parsing names.
 
-Neutral-name mapping: declared ONCE in ``lchqb/backend/fieldmap.py`` (the catalog
+Neutral-name mapping: declared ONCE in ``scqo_qblox/backend/fieldmap.py`` (the catalog
 ``scqo state --fields`` renders; drift-tested per channel kind against scqo's knob
 fields). The executable conversions are the three channel views below.
 """
@@ -29,7 +29,7 @@ from scqo.device import ComponentInfo, DeviceModel, EntityView, make_view_base
 from scqo.entities import Channel
 from scqo.fieldmap import Unrealized, VendorBinding, VendorOnly
 
-from lchqb.backend.fieldmap import FIELD_BINDINGS, UNREALIZED, VENDOR_ONLY
+from scqo_qblox.backend.fieldmap import FIELD_BINDINGS, UNREALIZED, VENDOR_ONLY
 
 if TYPE_CHECKING:
     from scqo.experiment import Experiment
@@ -250,10 +250,10 @@ def _att_limits(hw_agent: Any) -> dict[str, int]:
     agent. Keyed by port-clock (what the solve has in hand); the sidecar on disk
     is keyed physically, by slot/output.
     """
-    limits = getattr(hw_agent, "_lchqb_att_limits", None)
+    limits = getattr(hw_agent, "_scqo_qblox_att_limits", None)
     if limits is None:
         limits = {}
-        hw_agent._lchqb_att_limits = limits
+        hw_agent._scqo_qblox_att_limits = limits
     return limits
 
 
@@ -962,10 +962,10 @@ class QbloxBackend(Backend):
 
     def __init__(self, hardware_config: str, device_config: str,
                  output_dir: str | None = None, *, roster: "Roster") -> None:
-        # Lazy import keeps `import lchqb` free of qblox_scheduler. The elements import
+        # Lazy import keeps `import scqo_qblox` free of qblox_scheduler. The elements import
         # registers the lab's custom element types (FluxTunableTransmonElement) so the
         # dut config can be deserialized.
-        import lchqb.elements  # noqa: F401
+        import scqo_qblox.elements  # noqa: F401
         from qblox_scheduler import HardwareAgent
 
         self._roster = roster
@@ -1028,7 +1028,7 @@ class QbloxBackend(Backend):
         return self._roster
 
     def field_bindings(self) -> dict[str, dict[str, VendorBinding]]:
-        """The declared per-CHANNEL-KIND neutral-knob catalog (lchqb.backend.fieldmap)
+        """The declared per-CHANNEL-KIND neutral-knob catalog (scqo_qblox.backend.fieldmap)
         — the conversion CODE is the channel views above; this is its description."""
         return {kind: dict(bindings) for kind, bindings in FIELD_BINDINGS.items()}
 
@@ -1320,7 +1320,7 @@ class QbloxBackend(Backend):
         # fires for anything carrying the neutral field, before we touch the
         # instrument. check_reset_method is side-effect free, so being called
         # twice costs nothing.
-        from lchqb.experiments._reset import check_reset_method
+        from scqo_qblox.experiments._reset import check_reset_method
 
         check_reset_method(experiment)
         # Before probe(): the probe plays the amplitude this may re-solve.
@@ -1339,7 +1339,7 @@ class QbloxBackend(Backend):
                 # this quiets are the ones qblox_instruments leaves open until
                 # interpreter shutdown — so install here, and in `finally` so a run
                 # that raises still gets it. Idempotent; see _asyncio_noise.
-                from lchqb.backend._asyncio_noise import silence_proactor_self_pipe_noise
+                from scqo_qblox.backend._asyncio_noise import silence_proactor_self_pipe_noise
 
                 silence_proactor_self_pipe_noise(self._hw_agent)
         return self._to_canonical(raw, experiment)
@@ -1372,7 +1372,7 @@ class QbloxBackend(Backend):
         """
         from scqo.backend import PreviewWarning
 
-        from lchqb.experiments._reset import check_reset_method
+        from scqo_qblox.experiments._reset import check_reset_method
 
         # Backend-specific preview options: `no_simulate` is a harmless
         # request here (this preview is offline by construction), everything

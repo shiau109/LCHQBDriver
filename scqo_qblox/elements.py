@@ -12,7 +12,7 @@ behind the neutral ``drive_amp`` / ``drive_power_dbm`` pair),
 syncing, diff only the vendored ``FluxProperties`` / ``PiHalfProperties`` bodies.
 
 NOTE: imports qblox_scheduler — never import this module at package import time
-(only inside backend methods), so ``import lchqb`` stays vendor-free.
+(only inside backend methods), so ``import scqo_qblox`` stays vendor-free.
 """
 
 import math

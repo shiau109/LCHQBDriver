@@ -32,13 +32,13 @@ from conftest import (  # noqa: E402
     make_experiment,
 )
 
-import lchqb.experiments  # noqa: E402,F401  (import side effect: @register)
+import scqo_qblox.experiments  # noqa: E402,F401  (import side effect: @register)
 from scqo.experiments import catalog, get  # noqa: E402
 
 #: every experiment whose registered class comes from THIS driver
 QBLOX_PROBES = sorted(
     entry["name"] for entry in catalog()
-    if get(entry["name"]).__module__.startswith("lchqb."))
+    if get(entry["name"]).__module__.startswith("scqo_qblox."))
 
 #: keep the schedules small — this test is about the device surface, not physics
 #: (the values still clear each Parameters' own minimums: >4 sweep points, >=100
@@ -62,7 +62,7 @@ def _params(cls):
 
 def test_the_whole_driver_catalog_is_covered():
     """The parametrization below is only worth as much as its list."""
-    assert len(QBLOX_PROBES) == len(lchqb.experiments.__all__)
+    assert len(QBLOX_PROBES) == len(scqo_qblox.experiments.__all__)
 
 
 @pytest.mark.parametrize("name", QBLOX_PROBES)
@@ -99,7 +99,7 @@ def test_flux_probe_refuses_a_target_with_no_flux_channel(tmp_path):
     failing on a missing vendor port deep inside the schedule."""
     from scqo.roster import RosterError, parse_components
 
-    from lchqb.experiments.resonator_spectroscopy_flux import (
+    from scqo_qblox.experiments.resonator_spectroscopy_flux import (
         QbloxResonatorSpectroscopyFlux,
     )
 

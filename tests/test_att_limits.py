@@ -30,7 +30,7 @@ pytest.importorskip("qblox_scheduler")
 
 from conftest import make_backend  # noqa: E402
 
-from lchqb.backend.qblox_backend import (  # noqa: E402
+from scqo_qblox.backend.qblox_backend import (  # noqa: E402
     ATT_LIMITS_FILE,
     QBLOX_NOMINAL_FULL_SCALE_DBM,
     _att_limits,

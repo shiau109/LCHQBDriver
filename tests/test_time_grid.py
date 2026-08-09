@@ -84,7 +84,7 @@ def _off_grid_ns(values) -> float:
                          ids=[f"{n}-{i}" for i, (n, _) in enumerate(CASES)])
 def test_time_swept_probes_compile(tmp_path, roster, name, params):
     """The bug, end to end: these schedules must survive the 1 ns grid check."""
-    import lchqb.experiments  # noqa: F401  (registers the qblox probes)
+    import scqo_qblox.experiments  # noqa: F401  (registers the qblox probes)
     from scqo.experiments import get
 
     backend = make_backend(tmp_path, roster)

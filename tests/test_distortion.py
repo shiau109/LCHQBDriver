@@ -7,7 +7,7 @@ constructs a real ``QbloxHardwareDistortionCorrection`` to prove the dict valida
 
 import pytest
 
-from lchqb.backend._distortion import (
+from scqo_qblox.backend._distortion import (
     QBLOX_MAX_EXP_STAGES,
     to_qblox_distortion,
 )
