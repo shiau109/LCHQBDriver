@@ -62,3 +62,21 @@ def test_preview_overwrites_a_pinned_out_dir(tmp_path, roster):
     second = backend.preview(exp, out_dir)
     assert [f.name for f in first] == [f.name for f in second]
     assert all(f.is_file() for f in second)
+
+
+def test_preview_refuses_an_oversized_render(tmp_path, roster):
+    """The vendor diagram unrolls every loop before sampling (points x
+    repetitions of deep-copied operations — profiled 2026-08-09), so a
+    lab-sized schedule is refused by name, with the remedy, BEFORE the
+    compile. 51 x 400 is the real chipA standing default that hung."""
+    cls = get("qubit_ramsey")
+    backend = make_backend(tmp_path, roster)
+    exp = make_experiment(cls, backend, roster,
+                          cls.Parameters(targets=["q1"], num_points=51,
+                                         num_averages=400))
+    exp.sweep_axes = exp.define_sweep()
+    out_dir = tmp_path / "prev"
+    with pytest.raises(ValueError, match="rendered shots") as excinfo:
+        backend.preview(exp, out_dir)
+    assert "--set num_averages=2" in str(excinfo.value)  # names the remedy
+    assert not out_dir.exists()

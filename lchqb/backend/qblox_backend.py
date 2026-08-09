@@ -35,6 +35,19 @@ if TYPE_CHECKING:
     from scqo.experiment import Experiment
     from scqo.roster import Roster
 
+#: Rendered-shot ceiling for ``preview`` (sweep points x schedule.repetitions).
+#: The vendor pulse diagram UNROLLS every loop before sampling — profiled
+#: 2026-08-09 on chipA: a 51-point thermal ramsey at 400 averages spent 9.4 min
+#: inside sample_schedule, 84% of it in deepcopy under
+#: _unroll_single_loop (103k operation clones, 61,201 sampled pulses), and
+#: ``x_range`` does not bound that cost. Cost is linear in points x reps
+#: (~30 rendered shots draw in about a second), so 256 keeps a preview around
+#: ten seconds; anything bigger is refused by name with the exact remedy.
+_PREVIEW_MAX_RENDERED_SHOTS = 256
+
+#: timing_table.html row ceiling — the table unrolls with the same loops.
+_PREVIEW_TIMING_ROWS = 2000
+
 #: Nominal QRM-RF full-scale output (dBm) at pulse_amp=1.0, output_att=0 — the
 #: datasheet maximum (+5 dBm into 50 Ohm). Frequency/LO/mixer-dependent in reality,
 #: so absolute powers derived from it are good to ±a few dB; a per-setup
@@ -1344,17 +1357,44 @@ class QbloxBackend(Backend):
         att_limits.json — preview stays fully offline). Both artifacts need
         the compiled timeline: ``plot_pulse_diagram``/``timing_table``
         require absolute timing, so compilation is mandatory, and a failure
-        in either fails the preview — they ARE the product. No gate-level
-        ``circuit_diagram`` on purpose: the vendor's circuit renderer cannot
-        draw a hardware-loop swept schedule (uncompiled it dies comparing a
-        symbolic duration, compiled it dies in ``_draw_loop`` — measured
-        2026-08-09), and every registered probe sweeps. Under
-        ``reset_method="active"`` compilation unrolls the averaging loop in
-        Python (~14 s at 4000 averages) and preview pays it.
+        in either fails the preview — they ARE the product.
+
+        An OVERSIZED schedule is refused by name BEFORE compiling: the vendor
+        sampler draws every sweep point of EVERY repetition (and ``x_range``
+        does not bound the cost), so the render is linear in
+        points x repetitions and a lab-default sweep is hours — see
+        ``_PREVIEW_MAX_RENDERED_SHOTS``. No gate-level ``circuit_diagram`` on
+        purpose: the vendor's circuit renderer cannot draw a hardware-loop
+        swept schedule (uncompiled it dies comparing a symbolic duration,
+        compiled it dies in ``_draw_loop`` — measured 2026-08-09), and every
+        registered probe sweeps.
         """
+        from scqo.backend import PreviewWarning
+
         from lchqb.experiments._reset import check_reset_method
 
         check_reset_method(experiment)
+        name = getattr(type(experiment), "name", type(experiment).__name__)
+        # The rendered-shot guard runs BEFORE probe(): the averaging rides a
+        # LoopOperation inside the schedule (verified by the 61,201-pulse
+        # profile = points x averages x 3 exactly), so the schedule object
+        # itself reports repetitions=1 and the honest count is the one scqo
+        # already knows — the sweep grid times the shot count.
+        n_points = max(1, math.prod(
+            len(values) for values in experiment.sweep_axes.values()))
+        reps = int(getattr(experiment.params, "num_averages", None)
+                   or getattr(experiment.params, "num_shots", None) or 1)
+        rendered = n_points * max(1, reps)
+        if rendered > _PREVIEW_MAX_RENDERED_SHOTS:
+            raise ValueError(
+                f"{name}: preview refuses to render this schedule — the "
+                f"vendor pulse diagram unrolls and draws every repetition, "
+                f"and {n_points} sweep points x {reps} shots = {rendered} "
+                f"rendered shots (cap {_PREVIEW_MAX_RENDERED_SHOTS}; ~20k "
+                f"shots measured at 10+ minutes). The per-shot sequence "
+                f"does not change with the counts — preview it small, e.g. "
+                f"--set num_averages=2 --set num_points=5; the real run is "
+                f"unaffected")
         with self._thermalization_override(experiment):
             schedule = experiment.probe()  # native qblox_scheduler.Schedule
             from qblox_scheduler.backends.graph_compilation import SerialCompiler
@@ -1371,8 +1411,16 @@ class QbloxBackend(Backend):
         pulse_fig.write_html(str(pulse_html))
 
         timing_html = out_dir / "timing_table.html"
-        timing_html.write_text(compiled.timing_table.to_html(),
-                               encoding="utf-8")
+        timing_df = compiled.timing_table.data  # plain DataFrame, no Styler
+        body = timing_df.head(_PREVIEW_TIMING_ROWS).to_html()
+        if len(timing_df) > _PREVIEW_TIMING_ROWS:
+            body = (f"<p><b>truncated:</b> showing the first "
+                    f"{_PREVIEW_TIMING_ROWS} of {len(timing_df)} rows</p>"
+                    + body)
+            warnings.warn(PreviewWarning(
+                f"timing_table.html truncated to the first "
+                f"{_PREVIEW_TIMING_ROWS} of {len(timing_df)} rows"))
+        timing_html.write_text(body, encoding="utf-8")
         return [pulse_html, timing_html]
 
     @staticmethod
