@@ -20,7 +20,7 @@ pytest.importorskip("qblox_scheduler")
 
 from conftest import HW_MIN, make_backend, make_experiment  # noqa: E402
 
-from lchqb.backend.qblox_backend import QbloxBackend  # noqa: E402
+from scqo_qblox.backend.qblox_backend import QbloxBackend  # noqa: E402
 
 
 def _make_backend(tmp_path: Path, roster, poison: bool) -> QbloxBackend:
@@ -46,7 +46,7 @@ def _null_set_fields(backend: QbloxBackend) -> list[str]:
 def _compile_res_spec(backend: QbloxBackend, roster):
     """Build the real resonator-spectroscopy probe Schedule and compile it offline —
     the same SerialCompiler call HardwareAgent.run makes after connecting."""
-    import lchqb.experiments  # noqa: F401  (registers the qblox probe classes)
+    import scqo_qblox.experiments  # noqa: F401  (registers the qblox probe classes)
     from qblox_scheduler.backends.graph_compilation import SerialCompiler
     from scqo.experiments import get
 

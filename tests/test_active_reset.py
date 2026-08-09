@@ -89,7 +89,7 @@ def _calibrate(exp, *targets, depletion_s=DEPLETION_S):
 def _experiment(tmp_path, roster, name, *, targets=("q1",), hw_config=None, **params):
     from scqo.experiments import get
 
-    import lchqb.experiments  # noqa: F401  (registers the qblox probes)
+    import scqo_qblox.experiments  # noqa: F401  (registers the qblox probes)
 
     backend = make_backend(tmp_path, roster, hw_config=hw_config)
     cls = get(name)
@@ -149,7 +149,7 @@ def test_only_the_named_probes_opt_in():
     with a defaulting getattr so a probe added later fails CLOSED. That only means
     something if the opted-in set stays deliberate — this test is the deliberation:
     adding a probe to it must be an edit here, with a reason."""
-    import lchqb.experiments  # noqa: F401
+    import scqo_qblox.experiments  # noqa: F401
     from scqo.experiments import catalog, get
 
     opted = {entry["name"] for entry in catalog()
@@ -162,7 +162,7 @@ def test_denied_probes_carry_the_field_but_not_the_optin():
     DENIED list must be real. (qubit_spectroscopy_flux_pulse is deliberately NOT
     here: it is flux-tagged, carries no reset_method at all, and routes through
     add_reset only to keep the no-direct-gate invariant checkable.)"""
-    import lchqb.experiments  # noqa: F401
+    import scqo_qblox.experiments  # noqa: F401
     from scqo.experiments import get
 
     for name in DENIED:
@@ -440,7 +440,7 @@ def test_the_conditional_channel_never_reaches_the_dataset(tmp_path, roster):
     neutral contract has no slot for it. Known gap, pinned so it stays a
     deliberate one; the failure mode this rules out is an extra data_var
     reaching dataset.nc and breaking contract validation."""
-    from lchqb.backend.qblox_backend import QbloxBackend
+    from scqo_qblox.backend.qblox_backend import QbloxBackend
 
     backend, exp = _experiment(tmp_path, roster, "qubit_relaxation",
                                reset_method="active")
@@ -467,7 +467,7 @@ def test_no_probe_constructs_the_reset_gate_directly():
     """`_reset.py` is the only place either reset gate is built. This is what
     makes the opt-in fail CLOSED in practice: a probe copied from a neighbour
     cannot quietly bypass the guard, the acq-channel rule and the settle."""
-    probes = Path(__file__).resolve().parents[1] / "lchqb" / "experiments"
+    probes = Path(__file__).resolve().parents[1] / "scqo_qblox" / "experiments"
     offenders = []
     for path in sorted(probes.glob("*.py")):
         if path.name == "_reset.py":

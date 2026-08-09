@@ -1,4 +1,4 @@
-"""``lchqb/backend/_asyncio_noise.py`` — the Windows shutdown-noise suppressor.
+"""``scqo_qblox/backend/_asyncio_noise.py`` — the Windows shutdown-noise suppressor.
 
 Every ``scqo run`` on Windows printed a traceback after ``saved: <path>``: qblox's transport
 leaves a bare ``ProactorEventLoop`` open, and at interpreter shutdown its self-pipe read
@@ -16,7 +16,7 @@ import asyncio
 
 import pytest
 
-from lchqb.backend._asyncio_noise import (
+from scqo_qblox.backend._asyncio_noise import (
     _SELF_PIPE_MESSAGE,
     silence_proactor_self_pipe_noise,
 )
@@ -159,8 +159,8 @@ def test_acquire_installs_the_handler_around_every_run(tmp_path, roster, monkeyp
     ``run()`` is stubbed because it would otherwise dial the real cluster in hw_config.
     """
     pytest.importorskip("qblox_scheduler")
-    import lchqb.backend._asyncio_noise as noise
-    from lchqb.backend.qblox_backend import QbloxBackend
+    import scqo_qblox.backend._asyncio_noise as noise
+    from scqo_qblox.backend.qblox_backend import QbloxBackend
 
     backend, exp = _experiment(tmp_path, roster)
     seen_agents = []

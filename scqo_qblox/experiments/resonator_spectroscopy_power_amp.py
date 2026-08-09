@@ -36,7 +36,7 @@ from scqo import register
 from scqo.experiments import ResonatorSpectroscopyPowerAmp
 from scqo.experiments._depletion import depletion_wait_ns
 
-from lchqb.backend.qblox_backend import snap_ns
+from scqo_qblox.backend.qblox_backend import snap_ns
 
 #: Between-readout idle when NOTHING governs the wait — no per-run
 #: readout_depletion_ns and no calibrated readout_depletion_s knob. The probe's

@@ -35,8 +35,8 @@ from scqo import register
 from scqo.experiments import QubitParitySwitchDiscrete
 from scqo.experiments._depletion import depletion_wait_ns
 
-from lchqb.experiments._state import measure_kwargs
-from lchqb.experiments.qubit_parity_switch_continuous import (
+from scqo_qblox.experiments._state import measure_kwargs
+from scqo_qblox.experiments.qubit_parity_switch_continuous import (
     _MAX_ACQ_BINS,
     _op_durations,
 )

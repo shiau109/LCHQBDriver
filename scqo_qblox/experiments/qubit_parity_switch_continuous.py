@@ -33,7 +33,7 @@ from scqo import register
 from scqo.experiments import QubitParitySwitchContinuous
 from scqo.experiments._depletion import depletion_wait_ns
 
-from lchqb.experiments._state import measure_kwargs
+from scqo_qblox.experiments._state import measure_kwargs
 
 #: acquisition bins per sequencer (qblox_scheduler constants.MAX_NUMBER_OF_BINS).
 #: The parity monitors are the experiments whose shot counts can realistically
@@ -46,7 +46,7 @@ def _op_durations(experiment, target: str) -> tuple[float, float]:
     """(readout_s, pi_s) off the vendor elements: the Measure's pulse +
     acq-delay span and one pi/2 pulse duration. Shared by both parity
     monitors' scheduled-period sums, so the two timebases cannot drift."""
-    from lchqb.experiments._vendor import vendor_element
+    from scqo_qblox.experiments._vendor import vendor_element
 
     element = vendor_element(experiment, target, "readout")
     measure = element.measure

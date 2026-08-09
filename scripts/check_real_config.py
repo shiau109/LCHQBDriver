@@ -22,7 +22,7 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO))  # lchqb without pip install
+sys.path.insert(0, str(REPO))  # scqo_qblox without pip install
 try:
     import scqo  # noqa: F401
 except ImportError:  # sibling-repo layout (D:/github)
@@ -51,7 +51,7 @@ def main() -> int:
     print("   real data_root are NOT touched; real measurements use `scqo run`)")
 
     try:
-        import lchqb.elements  # noqa: F401  register the lab's custom element types
+        import scqo_qblox.elements  # noqa: F401  register the lab's custom element types
         from qblox_scheduler import QuantumDevice
     except ModuleNotFoundError as err:
         raise SystemExit(
@@ -69,7 +69,7 @@ def main() -> int:
         raise SystemExit(f"no q* elements in this config ({list(qd.elements)}) "
                          f"— name the ones to exercise with --targets")
 
-    from lchqb.backend.qblox_backend import QbloxDeviceModel
+    from scqo_qblox.backend.qblox_backend import QbloxDeviceModel
     from scqo.testing import demo_components
 
     # The driver resolves every name through the ROSTER (q1_ro -> the readout
@@ -85,7 +85,7 @@ def main() -> int:
         print(f"      {name}: {fields}")
     print(f"[2/6] snapshot OK | testing targets: {qubits}")
 
-    import lchqb.experiments  # noqa: F401
+    import scqo_qblox.experiments  # noqa: F401
     from scqo import Session
     from scqo.testing import SimulatedBackend
 
@@ -135,7 +135,7 @@ def main() -> int:
     try:
         from qblox_scheduler.backends.graph_compilation import SerialCompiler
 
-        from lchqb.backend.qblox_backend import QbloxBackend
+        from scqo_qblox.backend.qblox_backend import QbloxBackend
         from scqo.device import RecordingDevice
         from scqo.experiments import get
         from scqo.stores import state_store

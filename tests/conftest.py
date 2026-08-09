@@ -99,7 +99,7 @@ def make_backend(tmp_path: Path, roster, *, hw_config: dict | None = None):
     """
     if not DUT_FIXTURE.is_file():
         pytest.skip("SCQO checkout with demo_instr_config not found side-by-side")
-    from lchqb.backend.qblox_backend import QbloxBackend
+    from scqo_qblox.backend.qblox_backend import QbloxBackend
 
     shutil.copy(DUT_FIXTURE, tmp_path / "dut_config.json")
     hw = hw_config if hw_config is not None else json.loads(
@@ -144,7 +144,7 @@ def compile_probe(backend, exp):
     measured 2026-07-30, do not assume otherwise. A +/-0.9 domain (= +/-2.25 V on
     a QCM) compiles clean, and +/-3.0 dies with an internal numpy
     ``ufunc 'absolute' ... StrDType`` that names no port and no voltage. The real
-    range guard is ``lchqb/experiments/_flux_limits.py``, which runs BEFORE this.
+    range guard is ``scqo_qblox/experiments/_flux_limits.py``, which runs BEFORE this.
     """
     from qblox_scheduler.backends.graph_compilation import SerialCompiler
 

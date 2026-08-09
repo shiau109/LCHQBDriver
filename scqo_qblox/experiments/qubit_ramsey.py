@@ -23,8 +23,8 @@ from typing import Any, ClassVar
 from scqo import register
 from scqo.experiments import QubitRamsey
 
-from lchqb.experiments._reset import add_reset
-from lchqb.experiments._state import measure_kwargs
+from scqo_qblox.experiments._reset import add_reset
+from scqo_qblox.experiments._state import measure_kwargs
 
 
 @register

@@ -42,7 +42,7 @@ _WINERROR_INVALID_PARAMETER = 87
 
 #: Set on a loop we have already wrapped. ``acquire()`` runs once per experiment, so
 #: without this the handlers would nest one deeper every run.
-_MARKER = "_lchqb_self_pipe_handler"
+_MARKER = "_scqo_qblox_self_pipe_handler"
 
 
 def _install(loop: Any) -> bool:

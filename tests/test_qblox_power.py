@@ -21,7 +21,7 @@ pytest.importorskip("qblox_scheduler")
 
 from conftest import make_backend, make_experiment, recording_device  # noqa: E402
 
-from lchqb.backend.qblox_backend import (  # noqa: E402
+from scqo_qblox.backend.qblox_backend import (  # noqa: E402
     QBLOX_NOMINAL_FULL_SCALE_DBM,
     QbloxBackend,
 )
@@ -191,7 +191,7 @@ def test_power_context_readout_survives_unset_spec(backend):
 
 
 def test_catalog_registers_absolute_punchout():
-    import lchqb.experiments  # noqa: F401  (side effect: @register)
+    import scqo_qblox.experiments  # noqa: F401  (side effect: @register)
     from scqo import catalog
 
     names = {e["name"] for e in catalog()}
@@ -205,7 +205,7 @@ def test_absolute_punchout_axis_uniform_and_probe_is_per_point_1d(backend, roste
     for the point being acquired — no pulse_amp override in the schedule)."""
     import numpy as np
 
-    from lchqb.experiments.resonator_spectroscopy_power_chain import (
+    from scqo_qblox.experiments.resonator_spectroscopy_power_chain import (
         QbloxResonatorSpectroscopyPowerChain,
     )
 
@@ -260,7 +260,7 @@ def test_power_amp_loop_order_and_relaxation_param(backend, roster):
     nothing has measured yet)."""
     import numpy as np
 
-    from lchqb.experiments.resonator_spectroscopy_power_amp import (
+    from scqo_qblox.experiments.resonator_spectroscopy_power_amp import (
         QbloxResonatorSpectroscopyPowerAmp,
     )
 
@@ -362,7 +362,7 @@ def test_flux_probe_uses_cw_saturation_not_x(backend, roster):
     drive channel's drive_amp (the drive_power_dbm residual on spec_amp) instead of
     a calibrated X pulse; readout still follows the flux return to idle (QM parity).
     Structure only — a full compile needs flux-port wiring the minimal fixture lacks."""
-    from lchqb.experiments.qubit_spectroscopy_flux_pulse import QbloxQubitSpectroscopyFluxPulse
+    from scqo_qblox.experiments.qubit_spectroscopy_flux_pulse import QbloxQubitSpectroscopyFluxPulse
 
     exp = make_experiment(
         QbloxQubitSpectroscopyFluxPulse, backend, roster,

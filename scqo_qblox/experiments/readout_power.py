@@ -24,7 +24,7 @@ from typing import Any
 from scqo import register
 from scqo.experiments import ReadoutPower
 
-from ._amp import check_amp_window
+from ._amp_limits import check_amp_window
 from ._reset import add_reset
 
 

@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from lchqb.experiments._flux_limits import (
+from scqo_qblox.experiments._flux_limits import (
     check_flux_bias_absolute,
     check_flux_pulse_relative,
     flux_rail_v,
@@ -163,7 +163,7 @@ def test_the_resonator_flux_probe_emits_FRACTIONS_not_volts(tmp_path):
     0.12 of full scale, not as 0.3."""
     from scqo.roster import parse_components
 
-    from lchqb.experiments.resonator_spectroscopy_flux import (
+    from scqo_qblox.experiments.resonator_spectroscopy_flux import (
         QbloxResonatorSpectroscopyFlux as C,
     )
 
@@ -191,7 +191,7 @@ def test_the_park_offset_is_converted_too(tmp_path):
     one emission whose conversion can be read off directly."""
     from scqo.roster import parse_components
 
-    from lchqb.experiments.resonator_spectroscopy_flux import (
+    from scqo_qblox.experiments.resonator_spectroscopy_flux import (
         QbloxResonatorSpectroscopyFlux as C,
     )
 

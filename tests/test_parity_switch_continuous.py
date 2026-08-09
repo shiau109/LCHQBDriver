@@ -24,7 +24,7 @@ pytest.importorskip("qblox_scheduler")
 
 from conftest import compile_probe, make_backend, make_experiment  # noqa: E402
 
-from lchqb.experiments.qubit_parity_switch_continuous import (  # noqa: E402
+from scqo_qblox.experiments.qubit_parity_switch_continuous import (  # noqa: E402
     QbloxQubitParitySwitchContinuous,
 )
 
@@ -195,7 +195,7 @@ class TestAcquisitionTimeout:
         """3e6 acquisition bins at chipA's ~48.5 us shot (idle_multiple=3) is
         ~145 s of sequencer time — the most this experiment can ever request.
         The floor must clear that even when the estimate is unavailable."""
-        from lchqb.backend.qblox_backend import _RUN_TIMEOUT_S
+        from scqo_qblox.backend.qblox_backend import _RUN_TIMEOUT_S
 
         longest_run_s = 3_000_000 * 48.5e-6
         assert _RUN_TIMEOUT_S > longest_run_s
@@ -207,7 +207,7 @@ class TestAcquisitionTimeout:
         the cluster ``timeout_sec // 60`` MINUTES, floor division. A value that
         is not a multiple of 60 silently loses the remainder, and anything under
         60 truncates to a zero-minute deadline."""
-        from lchqb.backend.qblox_backend import _RUN_TIMEOUT_S
+        from scqo_qblox.backend.qblox_backend import _RUN_TIMEOUT_S
 
         assert _RUN_TIMEOUT_S % 60 == 0
         assert _RUN_TIMEOUT_S >= 300  # never below the proven-safe 5 minutes
@@ -217,7 +217,7 @@ class TestAcquisitionTimeout:
         shots x the slowest period, doubled and rounded up to a minute."""
         from types import SimpleNamespace
 
-        from lchqb.backend.qblox_backend import _run_timeout_s
+        from scqo_qblox.backend.qblox_backend import _run_timeout_s
 
         exp = SimpleNamespace(
             probe_shot_period_s={"q1": 100e-6, "q2": 80e-6},
@@ -234,7 +234,7 @@ class TestAcquisitionTimeout:
         import numpy as np
         from types import SimpleNamespace
 
-        from lchqb.backend.qblox_backend import _run_timeout_s
+        from scqo_qblox.backend.qblox_backend import _run_timeout_s
 
         chan = SimpleNamespace(thermalization_time_s=1.86e-3)
         exp = SimpleNamespace(
@@ -252,7 +252,7 @@ class TestAcquisitionTimeout:
         wrong timeout estimate must never be the thing that kills a run."""
         from types import SimpleNamespace
 
-        from lchqb.backend.qblox_backend import _RUN_TIMEOUT_S, _run_timeout_s
+        from scqo_qblox.backend.qblox_backend import _RUN_TIMEOUT_S, _run_timeout_s
 
         assert _run_timeout_s(SimpleNamespace(params=SimpleNamespace())) == _RUN_TIMEOUT_S
         assert _run_timeout_s(SimpleNamespace(params=None)) == _RUN_TIMEOUT_S
@@ -261,7 +261,7 @@ class TestAcquisitionTimeout:
         """A quick experiment must not LOWER the deadline below the floor."""
         from types import SimpleNamespace
 
-        from lchqb.backend.qblox_backend import _RUN_TIMEOUT_S, _run_timeout_s
+        from scqo_qblox.backend.qblox_backend import _RUN_TIMEOUT_S, _run_timeout_s
 
         chan = SimpleNamespace(thermalization_time_s=200e-6)
         exp = SimpleNamespace(
@@ -279,7 +279,7 @@ class TestAcquisitionTimeout:
         from conftest import make_backend, make_experiment
         from scqo.experiments import get
 
-        from lchqb.backend.qblox_backend import QbloxBackend
+        from scqo_qblox.backend.qblox_backend import QbloxBackend
 
         backend = make_backend(tmp_path, roster)
         cls = get("resonator_spectroscopy")

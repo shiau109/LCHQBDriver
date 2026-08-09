@@ -83,7 +83,7 @@ def _acq_protocols(schedule) -> set:
 def _experiment(tmp_path, roster, name, *, use_state):
     from scqo.experiments import get
 
-    import lchqb.experiments  # noqa: F401  (registers the qblox probes)
+    import scqo_qblox.experiments  # noqa: F401  (registers the qblox probes)
 
     backend = make_backend(tmp_path, roster)
     cls = get(name)
@@ -179,7 +179,7 @@ def test_rus_threshold_is_still_unrealized(tmp_path, roster):
 def test_the_fieldmap_agrees_with_the_view():
     """The drift alarm in miniature: the two promoted fields must be bindings and
     NOT unrealized, and the rus field the other way round."""
-    from lchqb.backend.fieldmap import FIELD_BINDINGS, UNREALIZED, VENDOR_ONLY
+    from scqo_qblox.backend.fieldmap import FIELD_BINDINGS, UNREALIZED, VENDOR_ONLY
 
     readout = FIELD_BINDINGS["readout"]
     assert "readout_rotation_rad" in readout and "readout_threshold" in readout
@@ -249,7 +249,7 @@ def test_thresholded_average_becomes_a_population_variable(tmp_path, roster):
     shot_idx sweep the cluster AVERAGED the thresholded shots, so under the readout
     schema the values are probabilities and land on `population` — `state` is
     reserved for per-shot outcomes."""
-    from lchqb.backend.qblox_backend import QbloxBackend
+    from scqo_qblox.backend.qblox_backend import QbloxBackend
 
     _backend, exp = _experiment(tmp_path, roster, "qubit_relaxation", use_state=True)
     exp.sweep_axes = exp.define_sweep()
@@ -270,8 +270,8 @@ def test_thresholded_shot_sweep_keeps_the_state_variable(tmp_path, roster):
     variable stays `state` (the per-shot form) — the parity monitors' telegraph."""
     from conftest import make_backend, make_experiment
 
-    from lchqb.backend.qblox_backend import QbloxBackend
-    from lchqb.experiments.qubit_parity_switch_continuous import (
+    from scqo_qblox.backend.qblox_backend import QbloxBackend
+    from scqo_qblox.experiments.qubit_parity_switch_continuous import (
         QbloxQubitParitySwitchContinuous,
     )
 
@@ -301,8 +301,8 @@ def test_thresholded_discrete_decode_keeps_state_with_meas_axis(tmp_path, roster
     them onto (shot_idx, meas_idx) and still land on per-shot `state`."""
     from conftest import make_backend, make_experiment
 
-    from lchqb.backend.qblox_backend import QbloxBackend
-    from lchqb.experiments.qubit_parity_switch_discrete import (
+    from scqo_qblox.backend.qblox_backend import QbloxBackend
+    from scqo_qblox.experiments.qubit_parity_switch_discrete import (
         QbloxQubitParitySwitchDiscrete,
     )
 
@@ -332,7 +332,7 @@ def test_thresholded_discrete_decode_keeps_state_with_meas_axis(tmp_path, roster
 def test_the_nan_sentinel_becomes_nan(tmp_path, roster):
     """The compiler substitutes -1 for a NaN threshold result. Left alone that reads
     as a valid population far below the floor and quietly drags the fit."""
-    from lchqb.backend.qblox_backend import QbloxBackend
+    from scqo_qblox.backend.qblox_backend import QbloxBackend
 
     _backend, exp = _experiment(tmp_path, roster, "qubit_relaxation", use_state=True)
     exp.sweep_axes = exp.define_sweep()
@@ -348,7 +348,7 @@ def test_the_nan_sentinel_becomes_nan(tmp_path, roster):
 
 def test_untresholded_raw_still_becomes_iq(tmp_path, roster):
     """The default path is untouched."""
-    from lchqb.backend.qblox_backend import QbloxBackend
+    from scqo_qblox.backend.qblox_backend import QbloxBackend
 
     _backend, exp = _experiment(tmp_path, roster, "qubit_relaxation", use_state=False)
     exp.sweep_axes = exp.define_sweep()
@@ -369,7 +369,7 @@ def test_single_shot_readout_proposes_the_discriminator(tmp_path, roster):
     two knobs. Without this override nothing on Qblox ever calibrates them."""
     from scqo.experiments import get
 
-    import lchqb.experiments  # noqa: F401
+    import scqo_qblox.experiments  # noqa: F401
 
     backend = make_backend(tmp_path, roster)
     cls = get("single_shot_readout")
@@ -414,7 +414,7 @@ def test_single_shot_readout_leaves_rus_alone(tmp_path, roster):
     why the Qblox override writes only two of QM's three."""
     from scqo.experiments import get
 
-    import lchqb.experiments  # noqa: F401
+    import scqo_qblox.experiments  # noqa: F401
 
     backend = make_backend(tmp_path, roster)
     cls = get("single_shot_readout")
@@ -453,7 +453,7 @@ def _ssro_on_blobs(tmp_path, roster, g, e, *, seed=5, sigma=7.36e-05, shots=2000
     already estimated — ready for update()."""
     from scqo.experiments import get
 
-    import lchqb.experiments  # noqa: F401
+    import scqo_qblox.experiments  # noqa: F401
 
     backend = backend if backend is not None else make_backend(tmp_path, roster)
     cls = get("single_shot_readout")

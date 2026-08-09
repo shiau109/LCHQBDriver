@@ -52,7 +52,7 @@ FIELD_BINDINGS: dict[str, dict[str, VendorBinding]] = {
             path="element.spec.spec_amp", unit="",
             note="the saturation (spec) drive amplitude - the CW VoltageOffset "
                  "fraction the qubit_spectroscopy probe plays, and the "
-                 "drive_power_dbm chain solve's residual (lchqb.elements "
+                 "drive_power_dbm chain solve's residual (scqo_qblox.elements "
                  "LCHTransmonElement's spec submodule)"),
         "drive_power_dbm": VendorBinding(
             path='hardware_options.output_att["<mw-port>-<qubit>.01"] '
@@ -176,7 +176,7 @@ UNREALIZED: dict[str, dict[str, Unrealized]] = {
             "besides. Both land when a Qblox DRAG experiment does"),
         "pi_amp_x90": Unrealized(
             "drive", "pi_amp_x90",
-            "the slot EXISTS -- PiHalfProperties.amp90 in lchqb/elements.py -- but no "
+            "the slot EXISTS -- PiHalfProperties.amp90 in scqo_qblox/elements.py -- but no "
             "Qblox probe writes it: qubit_deterministic_benchmarking is QM-only, as "
             "is the rest of that family (pi_pulse_error, sqrb, tomography, the drag "
             "and flux-coherence pairs). Binding an amplitude nothing calibrates would "

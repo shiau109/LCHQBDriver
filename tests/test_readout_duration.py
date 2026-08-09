@@ -17,7 +17,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from lchqb.backend.qblox_backend import QbloxReadoutChannel
+from scqo_qblox.backend.qblox_backend import QbloxReadoutChannel
 
 
 def _element(pulse_duration=2e-6, integration_time=2e-6):

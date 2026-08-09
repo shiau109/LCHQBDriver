@@ -25,7 +25,7 @@ pytest.importorskip("qblox_scheduler")
 
 from conftest import compile_probe, make_backend, make_experiment  # noqa: E402
 
-import lchqb.experiments  # noqa: E402,F401  (import side effect: @register)
+import scqo_qblox.experiments  # noqa: E402,F401  (import side effect: @register)
 from scqo.experiments import get  # noqa: E402
 
 DRIVE_PORT = "q1:mw"

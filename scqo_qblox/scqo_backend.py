@@ -36,6 +36,6 @@ def build_backend(cfg: LabConfig, setup: dict, roster: "Roster") -> Backend:
             "Copy the vendor files there under canonical names "
             "(dut_config_*.json -> dut_config.json, hw_config_*.json -> hw_config.json)."
         )
-    from lchqb.backend import QbloxBackend
+    from scqo_qblox.backend import QbloxBackend
 
     return QbloxBackend.load(config_dir=str(folder), roster=roster)
