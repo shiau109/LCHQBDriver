@@ -64,6 +64,19 @@ def test_preview_overwrites_a_pinned_out_dir(tmp_path, roster):
     assert all(f.is_file() for f in second)
 
 
+def test_backend_specific_options_are_gated(tmp_path, roster):
+    """--simulate-ns is a QM thing: here it must refuse by name, while
+    --no-simulate (a request for offline-ness this preview already has) is
+    accepted as a harmless no-op."""
+    backend, exp = _ramsey(tmp_path, roster)
+    with pytest.raises(ValueError, match="no simulator"):
+        backend.preview(exp, tmp_path / "prev", simulate_ns=5000)
+    assert not (tmp_path / "prev").exists()
+    files = backend.preview(exp, tmp_path / "prev", no_simulate=True)
+    assert [f.name for f in files] == ["pulse_diagram.html",
+                                       "timing_table.html"]
+
+
 def test_preview_refuses_an_oversized_render(tmp_path, roster):
     """The vendor diagram unrolls every loop before sampling (points x
     repetitions of deep-copied operations — profiled 2026-08-09), so a

@@ -1344,7 +1344,8 @@ class QbloxBackend(Backend):
                 silence_proactor_self_pipe_noise(self._hw_agent)
         return self._to_canonical(raw, experiment)
 
-    def preview(self, experiment: "Experiment", out_dir: Path) -> list[Path]:
+    def preview(self, experiment: "Experiment", out_dir: Path,
+                **options: Any) -> list[Path]:
         """Render the COMPILED schedule to files — no cluster, nothing saved.
 
         The scqo ``Backend.preview`` hook (``Session.preview`` /
@@ -1373,6 +1374,15 @@ class QbloxBackend(Backend):
 
         from lchqb.experiments._reset import check_reset_method
 
+        # Backend-specific preview options: `no_simulate` is a harmless
+        # request here (this preview is offline by construction), everything
+        # else is refused by name — never silently ignored.
+        options.pop("no_simulate", None)
+        if options:
+            raise ValueError(
+                f"the qblox backend has no simulator — preview option(s) "
+                f"{', '.join(sorted(options))} are not realized here (the "
+                f"compiled pulse diagram is already the full picture)")
         check_reset_method(experiment)
         name = getattr(type(experiment), "name", type(experiment).__name__)
         # The rendered-shot guard runs BEFORE probe(): the averaging rides a
