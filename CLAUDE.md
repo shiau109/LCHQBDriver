@@ -1,7 +1,7 @@
-# LCHQBDriver — Qblox backend for the `scqo` experiment API
+# scqo-qblox — Qblox backend for the `scqo` experiment API
 
 ## What this repo is
-The Qblox sibling of LCHQMDriver. It implements the **`scqo`** instrument-agnostic
+The Qblox sibling of scqo-qm. It implements the **`scqo`** instrument-agnostic
 experiment API (`D:\github\SCQO`) against the **Qblox** control stack
 (`qblox_scheduler`: `Schedule`, `HardwareAgent`, `QuantumDevice`).
 
@@ -17,7 +17,7 @@ experiment API (`D:\github\SCQO`) against the **Qblox** control stack
 
 ## Layout
 ```
-lchqb/
+scqo_qblox/
   backend/qblox_backend.py   # QbloxBackend (scqo.Backend) + QbloxDeviceModel + ONE view class
                              #   per CHANNEL KIND: QbloxDriveChannel / QbloxReadoutChannel /
                              #   QbloxFluxChannel (subclass scqo.device.make_view_base("drive"|
@@ -25,15 +25,17 @@ lchqb/
                              #   qblox_scheduler DeviceElement (the channel's single target)
                              #   wraps qblox_scheduler.HardwareAgent + QuantumDevice
   experiments/
-    __init__.py              # imports each experiment module so @register runs (populates catalog)
+    __init__.py              # imports each experiment module so @register runs (populates catalog;
+                             #   completeness enforced by tests/test_experiment_registration.py)
     _vendor.py               # the probes' one door out of the neutral surface: the raw
                              #   DeviceElement behind a target's default channel (ports,
                              #   flux sweet spot), addressed through the ROSTER
-    <name>.py                # one module per core experiment (all 12): Qblox<Name>(<Name>) with
+    _reset.py, _state.py, _flux_limits.py, _amp_limits.py   # the shared guard/branch helpers
+    <name>.py                # one module per core experiment (all 17): Qblox<Name>(<Name>) with
                              #   only probe() — e.g. resonator_spectroscopy, qubit_ramsey, ...
 qblox_config/                # ~ quam_config: device-model + config generation (stubs)
 qblox_state/                 # ~ quam_state: serialized dut_config.json / hw_config.json (generated)
-lchqb/scqo_backend.py            # the `scqo.backends` entry-point factory
+scqo_qblox/scqo_backend.py            # the `scqo.backends` entry-point factory
                                  #   build_backend(cfg, setup, roster): loads the SELECTED
                                  #   named setup's vendor folder (setup["instrument_config"],
                                  #   DERIVED <cid>/<setup>/backend_config since scqo v0.9;
@@ -51,22 +53,24 @@ simulated and saves nothing. Setup/labconfig detail lives in `SCQO\INSTALL.md` �
 ## Adding an experiment
 1. Subclass the backend-free experiment from `scqo.experiments.<name>`.
 2. Implement only `probe()` using `qblox_scheduler` (import the vendor lib *inside* the
-   method / backend so `import lchqb` stays light and the simulated path needs no Qblox).
+   method / backend so `import scqo_qblox` stays light and the simulated path needs no Qblox).
    Read device state through the CHANNEL that owns the knob —
    `self.device.channel(target, "readout").readout_freq_hz`, `...("drive").pi_amp` —
    never `backend.device.component(<qubit>)`; vendor-only bits (ports, the flux sweet
    spot) come from `_vendor.vendor_element(self, target, kind)`.
-3. `@register` the subclass and import the module in `lchqb/experiments/__init__.py`.
+3. `@register` the subclass and import the module in `scqo_qblox/experiments/__init__.py`
+   (manual — `tests/test_experiment_registration.py` refuses a module missing its line —
+   and keep `__all__` in step with it; `test_probe_surface.py` compares it to the catalog).
 Everything else (parameters, fitting, writeback, simulation) is inherited from `scqo`.
 
 ## Reference
 - Terminology (Experiment = probe + estimator; "protocol" retired): `D:\github\SCQO\CLAUDE.md` → **Terminology**.
 - Shared API + patterns: `D:\github\SCQO\CLAUDE.md`.
 - Qblox usage examples (read-only demo repo): `D:\github\QBLOX_training\docs\applications\superconducting`.
-- QM sibling (do not import from it): `D:\github\LCHQMDriver`.
+- QM sibling (do not import from it): `D:\github\scqo-qm`.
 
 ## Hardware invariants
-- `lchqb/elements.py` vendors the lab's element types and deliberately EXTENDS the
+- `scqo_qblox/elements.py` vendors the lab's element types and deliberately EXTENDS the
   QBLOX_training copy: `LCHTransmonElement` adds the `spec` submodule (`spec_amp`,
   the saturation-drive slot behind `drive_amp`/`drive_power_dbm`);
   `FluxTunableTransmonElement` subclasses it. `QbloxBackend` must register them
@@ -293,7 +297,7 @@ in the lab venv too:
 `D:\github\.venv-qblox\Scripts\python.exe -m pytest tests/ -q`.
 
 ### Testing discipline — here, just run the whole thing
-`uv run pytest tests/ -q` — **214 tests, ~98 s** (plain `uv run` is correct: `scqo` is a hard
+`uv run pytest tests/ -q` — **~266 tests, ~100 s** (plain `uv run` is correct: `scqo` is a hard
 dependency in `pyproject.toml`, so uv's sync keeps it). At this size a selection map would cost
 more attention than it saves; unlike SCQO (618 tests, ~10 min) and scqat (329 / ~84 s), the full
 suite IS the targeted run. Run it before every commit.
@@ -320,4 +324,5 @@ back up before you commit. Below ~10 s there is nothing left to win here; don't 
 | `test_mixer_calibration.py` | `scripts/calibrate_mixers.py`: the pure plan (config -> LO/NCO groups) + the AMC control flow on a `dummy_cfg` cluster (channel map, tone, sequencer snapshot/restart, cache) |
 | `test_asyncio_noise.py` | the WinError-87 shutdown suppressor: what it swallows, what it must NOT, idempotence, and that `acquire()` installs it even when the run raises |
 | `test_preview.py` | `QbloxBackend.preview`: both compiled artifacts render offline, no `_sync_att_limits` call, pinned `--out` dir overwrites in place, the rendered-shot cap refuses lab-sized schedules by name |
+| `test_experiment_registration.py` | every experiment module has its `__init__` import line (both directions) |
 | `test_scqo_glue.py` | the `scqo` CLI works in THIS venv + the qblox factory (slow — see above) |
