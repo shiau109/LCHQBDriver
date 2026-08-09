@@ -3157,7 +3157,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "scqo"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "../SCQO" }
 dependencies = [
     { name = "netcdf4" },
@@ -3194,7 +3194,7 @@ dev = [
 
 [[package]]
 name = "scqo-qblox"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "lmfit" },
