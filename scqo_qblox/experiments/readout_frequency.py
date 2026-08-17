@@ -1,16 +1,25 @@
-"""Qblox per-shot readout-frequency scan — supplies only ``probe()``.
+"""Qblox readout-frequency scan — supplies only ``probe()``.
 
 Per readout detuning the readout frequency is set via ``Measure(freq=...)``
 (detuning relative to the CURRENT ``readout_freq_hz``). State preparation follows the
 cal13 dispersive-shift reference (measure |0>, then Reset -> X -> measure |1>),
-arranged as two sequential prepared-state blocks per frequency with the shot loop
-variable CAPTURED into labeled coords — the single_shot_readout per-shot
-mechanism, so the cluster appends one I/Q point per shot instead of averaging.
-Flat bin order is frequency-major, then state, then shot, matching the canonical
-sweep axes (``detuning_hz``, ``prepared_state``, ``shot_idx``). No reps loop / no
-``num_averages`` by design. Same goal as cal13's averaged chi scan, measured by
-the criterion that matters directly: assignment fidelity. Parameters and the
-fidelity-vs-frequency fit are inherited from ``scqo.experiments.ReadoutFrequency``.
+arranged as two sequential prepared-state blocks per frequency.
+
+BOTH readout modes come off the same schedule, and the ONE difference is whether
+the repetition loop's variable is CAPTURED into the bin coords:
+
+* ``readout_mode="shot"`` — ``coords={... "shot_<q>": shot}`` labels every
+  repetition, so the cluster appends one I/Q point per shot instead of averaging
+  (the single_shot_readout mechanism). Flat bin order is frequency-major, then
+  state, then shot: ``detuning_hz``, ``prepared_state``, ``shot_idx``.
+* ``readout_mode="average"`` — the same loop runs unlabeled, so every repetition
+  lands in the SAME bin and the cluster averages it (the resonator_spectroscopy
+  idiom). No ``shot_idx`` at all, which is the form scqo's contract accepts as
+  its alt set.
+
+Same goal as cal13's averaged chi scan; in shot mode it is measured by the
+criterion that matters directly, assignment fidelity. Parameters and the analysis
+are inherited from ``scqo.experiments.ReadoutFrequency``.
 """
 
 from __future__ import annotations
@@ -25,7 +34,7 @@ from ._reset import add_reset
 
 @register
 class QbloxReadoutFrequency(ReadoutFrequency):
-    """Build a multiplexed per-shot readout-frequency Schedule for a Qblox cluster."""
+    """Build a multiplexed readout-frequency Schedule for a Qblox cluster."""
 
     # No supports_active_reset: this probe SWEEPS the readout frequency, so the
     # discriminator single_shot_readout solved at the nominal tone is wrong at
@@ -38,6 +47,12 @@ class QbloxReadoutFrequency(ReadoutFrequency):
 
         detuning = self.sweep_axes["detuning_hz"]
         num_shots = int(self.params.num_shots)
+        per_shot = self.params.readout_mode == "shot"
+
+        def shot_coord(qubit: str, shot) -> dict:
+            """The shot label, and ONLY in shot mode: an unlabeled repetition
+            loop is what makes the cluster average into one bin."""
+            return {f"shot_{qubit}": shot} if per_shot else {}
 
         schedule = Schedule("readout_frequency_multiplexed")
         for qubit_name in self.params.targets:
@@ -52,7 +67,8 @@ class QbloxReadoutFrequency(ReadoutFrequency):
                     dtype=DType.FREQUENCY,
                 )
             ) as freq:
-                # prepared_state 0: Reset -> Measure, one labeled bin per shot
+                # prepared_state 0: Reset -> Measure, one bin per shot (shot
+                # mode) or one averaged bin (average mode)
                 with sub.loop(arange(0, num_shots, 1, DType.NUMBER)) as shot:
                     add_reset(sub, self, qubit_name)
                     sub.add(
@@ -62,7 +78,7 @@ class QbloxReadoutFrequency(ReadoutFrequency):
                             coords={
                                 f"frequency_{qubit_name}": freq,
                                 f"state_{qubit_name}": 0,
-                                f"shot_{qubit_name}": shot,
+                                **shot_coord(qubit_name, shot),
                             },
                             acq_channel=f"S_21_{qubit_name}",
                         )
@@ -75,7 +91,7 @@ class QbloxReadoutFrequency(ReadoutFrequency):
                     # shot. Without it, chipA 2026-07-26: "Parameter operation
                     # ... cannot be scheduled exactly before ... ControlFlowReturn".
                     sub.add(IdlePulse(4e-9))
-                # prepared_state 1: Reset -> X -> Measure, one labeled bin per shot
+                # prepared_state 1: Reset -> X -> Measure, same binning rule
                 with sub.loop(arange(0, num_shots, 1, DType.NUMBER)) as shot:
                     add_reset(sub, self, qubit_name)
                     sub.add(X(qubit=qubit_name))
@@ -86,7 +102,7 @@ class QbloxReadoutFrequency(ReadoutFrequency):
                             coords={
                                 f"frequency_{qubit_name}": freq,
                                 f"state_{qubit_name}": 1,
-                                f"shot_{qubit_name}": shot,
+                                **shot_coord(qubit_name, shot),
                             },
                             acq_channel=f"S_21_{qubit_name}",
                         )

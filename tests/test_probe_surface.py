@@ -93,6 +93,54 @@ def test_probe_compiles(tmp_path, roster, name):
     assert compiled.operations, f"{name}: empty schedule"
 
 
+def _acquisition_bins(compiled) -> int:
+    """How many acquisition bins the CLUSTER will fill — the compiled truth
+    behind 'shot mode appends, average mode averages'. Walks the binned
+    acquisition mapping's control-flow tree, whose leaves carry the indices."""
+    indices = set()
+
+    def walk(node):
+        acq_index = getattr(node, "acq_index", None)
+        if acq_index is not None and hasattr(acq_index, "acq_index"):
+            indices.update(acq_index.acq_index)
+        for child in getattr(node, "children", None) or []:
+            walk(child)
+
+    for cluster in compiled.compiled_instructions.values():
+        if not isinstance(cluster, dict):
+            continue
+        for module in cluster.values():
+            mapping = module.get("acq_hardware_mapping") if isinstance(module, dict) else None
+            for sequencer in (mapping or {}).values():
+                for binned in sequencer.binned:
+                    walk(binned.tree)
+    return len(indices)
+
+
+@pytest.mark.parametrize("name,points_field", [("readout_power", "num_amp_points"),
+                                               ("readout_frequency", "num_freq_points")])
+def test_readout_sweeps_bin_per_shot_or_average(tmp_path, roster, name, points_field):
+    """The ONE thing that makes average mode average is that the repetition
+    loop's variable is not captured into the bin coords. Asserted where it is
+    decidable — the COMPILED acquisition mapping: shot mode reserves a bin per
+    (sweep point, prepared state, shot), average mode reserves one per (sweep
+    point, prepared state) and the cluster averages num_shots repetitions into
+    each. A missed label would silently merge every shot into one bin."""
+    cls = get(name)
+    backend = make_backend(tmp_path, roster)
+    params = _params(cls)
+    points = getattr(params, points_field)
+    swept_bins = points * 2  # x prepared_state
+
+    def bins(mode):
+        exp = make_experiment(cls, backend, roster,
+                              params.model_copy(update={"readout_mode": mode}))
+        return _acquisition_bins(compile_probe(backend, exp))
+
+    assert bins("shot") == swept_bins * params.num_shots
+    assert bins("average") == swept_bins
+
+
 def test_flux_probe_refuses_a_target_with_no_flux_channel(tmp_path):
     """Reaching the flux port through the target's FLUX channel makes wiring the
     guard: a qubit with no flux line refuses in the roster, by name, instead of
