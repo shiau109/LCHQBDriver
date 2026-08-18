@@ -15,6 +15,7 @@ from . import qubit_spectroscopy_overlap  # noqa: F401  (import side effect: @re
 from . import qubit_thermal_population  # noqa: F401  (import side effect: @register)
 from . import readout_frequency  # noqa: F401  (import side effect: @register)
 from . import readout_power  # noqa: F401  (import side effect: @register)
+from . import broadband_resonator_spectroscopy  # noqa: F401  (import side effect: @register)
 from . import resonator_spectroscopy  # noqa: F401  (import side effect: @register)
 from . import resonator_spectroscopy_flux  # noqa: F401  (import side effect: @register)
 from . import resonator_spectroscopy_power_chain  # noqa: F401  (import side effect: @register)
@@ -22,6 +23,7 @@ from . import resonator_spectroscopy_power_amp  # noqa: F401  (import side effec
 from . import single_shot_readout  # noqa: F401  (import side effect: @register)
 
 __all__ = [
+    "broadband_resonator_spectroscopy",
     "resonator_spectroscopy",
     "qubit_spectroscopy",
     "qubit_spectroscopy_flux_pulse",
