@@ -71,8 +71,6 @@ class QbloxQubitSpectroscopyOverlap(QubitSpectroscopyOverlap):
         from qblox_scheduler.operations.loop_domains import DType, arange, linspace
 
         detuning = self.sweep_axes["detuning_hz"]
-        span = float(detuning[-1] - detuning[0])
-        num = self.params.num_points
         reps = self.params.num_averages
 
         schedule = Schedule("qubit_spectroscopy_overlap_multiplexed")
@@ -94,8 +92,17 @@ class QbloxQubitSpectroscopyOverlap(QubitSpectroscopyOverlap):
             meas_label = f"meas_{qubit_name}"
             sub = Schedule(f"qubit_spec_overlap_{qubit_name}")
             with sub.loop(arange(0, reps, 1, DType.NUMBER)):
+                # endpoint form, never center +/- span/2: the scqo window is an
+                # explicit [start, end] relative to drive_freq_hz and may be
+                # ASYMMETRIC — re-deriving a symmetric span would silently
+                # re-center it (the flux_pulse probe set this pattern)
                 with sub.loop(
-                    linspace(center - span / 2, center + span / 2, num, dtype=DType.FREQUENCY)
+                    linspace(
+                        center + float(detuning[0]),
+                        center + float(detuning[-1]),
+                        detuning.size,
+                        dtype=DType.FREQUENCY,
+                    )
                 ) as freq:
                     # retune the drive NCO while the drive is still OFF, then let
                     # the reset run — unlike the sibling probe this Reset is a
