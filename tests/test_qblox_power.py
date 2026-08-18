@@ -213,7 +213,7 @@ def test_absolute_punchout_axis_uniform_and_probe_is_per_point_1d(backend, roste
         QbloxResonatorSpectroscopyPowerChain, backend, roster,
         QbloxResonatorSpectroscopyPowerChain.Parameters(
             targets=["q1"], max_power_dbm=-15.0, min_power_dbm=-45.0,
-            num_power_points=11, num_freq_points=5, num_averages=10,
+            num_power_points=11, num_readout_freq_points=5, num_averages=10,
         ),
     )
     axes = exp.define_sweep()
@@ -273,7 +273,7 @@ def test_power_amp_loop_order_and_relaxation_param(backend, roster):
         exp = QbloxResonatorSpectroscopyPowerAmp(
             backend,
             QbloxResonatorSpectroscopyPowerAmp.Parameters(
-                targets=["q1"], num_power_points=5, num_freq_points=3, num_averages=7,
+                targets=["q1"], num_power_points=5, num_readout_freq_points=3, num_averages=7,
                 readout_depletion_ns=relax_ns,
             ),
         )
@@ -367,7 +367,7 @@ def test_flux_probe_uses_cw_saturation_not_x(backend, roster):
     exp = make_experiment(
         QbloxQubitSpectroscopyFluxPulse, backend, roster,
         QbloxQubitSpectroscopyFluxPulse.Parameters(
-            targets=["q1"], num_freq_points=3, num_flux_points=5, num_averages=7,
+            targets=["q1"], num_drive_freq_points=3, num_flux_points=5, num_averages=7,
         ),
     )
     # parks spec_amp on the drive channel; the probe reads the same knob back

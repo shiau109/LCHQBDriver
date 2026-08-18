@@ -28,7 +28,9 @@ def agent_decide(catalog: list[dict], device_state: dict,
     channels included (``q0_ro``, ``q0_xy``), so it is context, not a target list.
     """
     _ = catalog, device_state
-    return "resonator_spectroscopy", {"targets": targets, "frequency_span_hz": 15e6}
+    return "resonator_spectroscopy", {"targets": targets,
+                                      "start_readout_detuning_hz": -7.5e6,
+                                      "end_readout_detuning_hz": 7.5e6}
 
 
 def main() -> None:

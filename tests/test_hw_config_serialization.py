@@ -53,7 +53,7 @@ def _compile_res_spec(backend: QbloxBackend, roster):
     exp_cls = get("resonator_spectroscopy")
     exp = make_experiment(
         exp_cls, backend, roster,
-        exp_cls.Parameters(targets=["q1"], num_points=11, num_averages=2))
+        exp_cls.Parameters(targets=["q1"], num_readout_freq_points=11, num_averages=2))
     exp.sweep_axes = exp.define_sweep()
     schedule = exp.probe()
     qd = backend._hw_agent.quantum_device

@@ -23,8 +23,6 @@ class QbloxResonatorSpectroscopy(ResonatorSpectroscopy):
         from qblox_scheduler.operations.loop_domains import DType, arange, linspace
 
         detuning = self.sweep_axes["detuning_hz"]
-        span = float(detuning[-1] - detuning[0])
-        num = self.params.num_points
         reps = self.params.num_averages
 
         schedule = Schedule("resonator_spectroscopy_multiplexed")
@@ -33,8 +31,17 @@ class QbloxResonatorSpectroscopy(ResonatorSpectroscopy):
             center = self.device.channel(qubit_name, "readout").readout_freq_hz
             sub = Schedule(f"res_spec_{qubit_name}")
             with sub.loop(arange(0, reps, 1, DType.NUMBER)):
+                # endpoint form, never center +/- span/2: the scqo window is an
+                # explicit [start, end] relative to readout_freq_hz and may be
+                # ASYMMETRIC — re-deriving a symmetric span would silently
+                # re-center it (the flux probe set this pattern)
                 with sub.loop(
-                    linspace(center - span / 2, center + span / 2, num, dtype=DType.FREQUENCY)
+                    linspace(
+                        center + float(detuning[0]),
+                        center + float(detuning[-1]),
+                        detuning.size,
+                        dtype=DType.FREQUENCY,
+                    )
                 ) as freq:
                     # coords labels the sweep point and acq_channel names the S21
                     # acquisition: without them the cluster averages the whole sweep

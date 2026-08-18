@@ -145,7 +145,7 @@ def _experiment(tmp_path, roster):
 
     backend = make_backend(tmp_path, roster)
     cls = get("resonator_spectroscopy")
-    exp = make_experiment(cls, backend, roster, cls.Parameters(targets=["q1"], num_points=5))
+    exp = make_experiment(cls, backend, roster, cls.Parameters(targets=["q1"], num_readout_freq_points=5))
     exp.sweep_axes = exp.define_sweep()
     return backend, exp
 

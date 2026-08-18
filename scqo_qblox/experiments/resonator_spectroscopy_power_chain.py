@@ -34,8 +34,6 @@ class QbloxResonatorSpectroscopyPowerChain(ResonatorSpectroscopyPowerChain):
         from qblox_scheduler.operations.loop_domains import DType, arange, linspace
 
         detuning = self.sweep_axes["detuning_hz"]
-        span = float(detuning[-1] - detuning[0])
-        num = self.params.num_freq_points
         reps = self.params.num_averages
 
         schedule = Schedule("resonator_spectroscopy_power_chain_point")
@@ -43,8 +41,18 @@ class QbloxResonatorSpectroscopyPowerChain(ResonatorSpectroscopyPowerChain):
             center = self.device.channel(qubit_name, "readout").readout_freq_hz
             sub = Schedule(f"punchout_point_{qubit_name}")
             with sub.loop(arange(0, reps, 1, DType.NUMBER)):
+                # endpoint form, never center +/- span/2: the scqo window is an
+                # explicit [start, end] relative to readout_freq_hz and may be
+                # ASYMMETRIC — a punchout walks the dip DOWN toward the bare
+                # resonator, so re-deriving a symmetric span would silently
+                # re-center exactly the sweep that needs the asymmetry
                 with sub.loop(
-                    linspace(center - span / 2, center + span / 2, num, dtype=DType.FREQUENCY)
+                    linspace(
+                        center + float(detuning[0]),
+                        center + float(detuning[-1]),
+                        detuning.size,
+                        dtype=DType.FREQUENCY,
+                    )
                 ) as freq:
                     # measured at the element's CURRENT pulse_amp (the chain solve
                     # set it); the IdlePulse is the resonator depletion wait
