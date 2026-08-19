@@ -1,20 +1,30 @@
-"""Qblox per-shot readout-amplitude scan — supplies only ``probe()``.
+"""Qblox readout-amplitude scan — supplies only ``probe()``.
 
 Per amplitude prefactor the readout pulse amplitude is set via
 ``Measure(pulse_amp=...)``, prefactor x the CURRENT ``readout_amp`` (read the same
 way resonator_spectroscopy_power_amp's punchout probe reads it). Each prefactor runs
 two sequential prepared-state blocks (|0>: Reset -> Measure, |1>: Reset -> X ->
-Measure) with the shot loop variable CAPTURED into labeled coords — the
-single_shot_readout per-shot mechanism, so the cluster appends one I/Q point per
-shot instead of averaging. Flat bin order is amp-major, then state, then shot,
-matching the canonical sweep axes (``amp_prefactor``, ``prepared_state``,
-``shot_idx``). No reps loop / no ``num_averages`` by design.
+Measure).
+
+BOTH readout modes come off the same schedule, and the ONE difference is whether
+the repetition loop's variable is CAPTURED into the bin coords:
+
+* ``readout_mode="shot"`` — ``coords={... "shot_<q>": shot}`` labels every
+  repetition, so the cluster appends one I/Q point per shot instead of averaging
+  (the single_shot_readout mechanism). Flat bin order is amp-major, then state,
+  then shot: ``amp_prefactor``, ``prepared_state``, ``shot_idx``.
+* ``readout_mode="average"`` — the same loop runs unlabeled, so every repetition
+  lands in the SAME bin and the cluster averages it (the resonator_spectroscopy
+  idiom). No ``shot_idx`` at all, which is the form scqo's contract accepts as
+  its alt set.
+
+There is no separate ``num_averages``: ``num_shots`` IS the repetition count in
+both modes.
 
 Method note: QBLOX_training's cal17 calibrates readout amplitude via the AC-Stark
-shift of the qubit frequency — a different (averaged) method deliberately NOT
-followed here; this probe is the per-shot fidelity method matching the QM backend.
-Parameters and the fidelity-vs-amplitude fit are inherited from
-``scqo.experiments.ReadoutPower``.
+shift of the qubit frequency — a different method deliberately NOT followed here;
+this probe measures the states directly, matching the QM backend. Parameters and
+the analysis are inherited from ``scqo.experiments.ReadoutPower``.
 """
 
 from __future__ import annotations
@@ -30,7 +40,7 @@ from ._reset import add_reset
 
 @register
 class QbloxReadoutPower(ReadoutPower):
-    """Build a multiplexed per-shot readout-amplitude Schedule for a Qblox cluster."""
+    """Build a multiplexed readout-amplitude Schedule for a Qblox cluster."""
 
     # No supports_active_reset: this probe SWEEPS the readout amplitude, so the
     # discriminator single_shot_readout solved at the nominal power is wrong at
@@ -43,6 +53,12 @@ class QbloxReadoutPower(ReadoutPower):
 
         prefactors = self.sweep_axes["amp_prefactor"]
         num_shots = int(self.params.num_shots)
+        per_shot = self.params.readout_mode == "shot"
+
+        def shot_coord(qubit: str, shot) -> dict:
+            """The shot label, and ONLY in shot mode: an unlabeled repetition
+            loop is what makes the cluster average into one bin."""
+            return {f"shot_{qubit}": shot} if per_shot else {}
 
         schedule = Schedule("readout_power_multiplexed")
         for qubit_name in self.params.targets:
@@ -57,7 +73,8 @@ class QbloxReadoutPower(ReadoutPower):
             with sub.loop(
                 linspace(amp_lo, amp_hi, prefactors.size, dtype=DType.AMPLITUDE)
             ) as amp:
-                # prepared_state 0: Reset -> Measure, one labeled bin per shot
+                # prepared_state 0: Reset -> Measure, one bin per shot (shot
+                # mode) or one averaged bin (average mode)
                 with sub.loop(arange(0, num_shots, 1, DType.NUMBER)) as shot:
                     add_reset(sub, self, qubit_name)
                     sub.add(
@@ -67,12 +84,12 @@ class QbloxReadoutPower(ReadoutPower):
                             coords={
                                 f"amp_{qubit_name}": amp,
                                 f"state_{qubit_name}": 0,
-                                f"shot_{qubit_name}": shot,
+                                **shot_coord(qubit_name, shot),
                             },
                             acq_channel=f"S_21_{qubit_name}",
                         )
                     )
-                # prepared_state 1: Reset -> X -> Measure, one labeled bin per shot
+                # prepared_state 1: Reset -> X -> Measure, same binning rule
                 with sub.loop(arange(0, num_shots, 1, DType.NUMBER)) as shot:
                     add_reset(sub, self, qubit_name)
                     sub.add(X(qubit=qubit_name))
@@ -83,7 +100,7 @@ class QbloxReadoutPower(ReadoutPower):
                             coords={
                                 f"amp_{qubit_name}": amp,
                                 f"state_{qubit_name}": 1,
-                                f"shot_{qubit_name}": shot,
+                                **shot_coord(qubit_name, shot),
                             },
                             acq_channel=f"S_21_{qubit_name}",
                         )

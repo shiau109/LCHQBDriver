@@ -91,7 +91,7 @@ def _run(tmp_path, roster, **params):
     backend = make_backend(tmp_path, roster)
     exp = make_experiment(
         cls, backend, roster,
-        cls.Parameters(targets=["q1"], num_points=5, num_averages=2, **params),
+        cls.Parameters(targets=["q1"], num_drive_freq_points=5, num_averages=2, **params),
     )
     # the two-tone probes play the drive chain's residual (spec_amp), which the
     # fixture leaves unseeded; the core run() solves it before probing

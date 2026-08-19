@@ -272,7 +272,9 @@ Everything else (parameters, fitting, writeback, simulation) is inherited from `
   by name with the exact `--set` remedy**: the vendor visualizer UNROLLS every loop by
   deepcopy before sampling (profiled 2026-08-09 — 51 pts × 400 avg = 9.4 min in
   sample_schedule, 84% deepcopy; `x_range` does NOT bound it), so lab-default counts are
-  hours. Preview small (`--set num_averages=2 --set num_points=5`) — the per-shot
+  hours. Preview small (`--set num_averages=2` + the experiment's point-count
+  parameter, which is per-capability: `num_points` on the time sweeps,
+  `num_readout_freq_points` on the readout-detuning ones) — the per-shot
   sequence is identical. No gate-level circuit diagram on purpose: the vendor renderer
   cannot draw hardware-loop swept schedules (dies uncompiled AND compiled, measured
   2026-08-09), and every registered probe sweeps.

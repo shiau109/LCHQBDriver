@@ -58,8 +58,6 @@ class QbloxResonatorSpectroscopyPowerAmp(ResonatorSpectroscopyPowerAmp):
         from qblox_scheduler.operations.loop_domains import DType, arange, linspace
 
         detuning = self.sweep_axes["detuning_hz"]
-        span = float(detuning[-1] - detuning[0])
-        n_freq = self.params.num_freq_points
         # geometric prefactors realizing the core's UNIFORM dBm grid (top exactly 1.0)
         power_dbm = np.asarray(self.sweep_axes["power_dbm"])
         amps_rel = 10.0 ** ((power_dbm - self.params.max_power_dbm) / 20.0)
@@ -91,8 +89,18 @@ class QbloxResonatorSpectroscopyPowerAmp(ResonatorSpectroscopyPowerAmp):
             for amp_val in amps:
                 amp_val = float(amp_val)
                 with sub.loop(arange(0, reps, 1, DType.NUMBER)):
+                    # endpoint form, never center +/- span/2: the scqo window is
+                    # an explicit [start, end] relative to readout_freq_hz and
+                    # may be ASYMMETRIC — a punchout walks the dip DOWN toward
+                    # the bare resonator, so re-deriving a symmetric span would
+                    # silently re-center exactly the sweep that needs it
                     with sub.loop(
-                        linspace(center - span / 2, center + span / 2, n_freq, dtype=DType.FREQUENCY)
+                        linspace(
+                            center + float(detuning[0]),
+                            center + float(detuning[-1]),
+                            detuning.size,
+                            dtype=DType.FREQUENCY,
+                        )
                     ) as freq:
                         sub.add(
                             Measure(

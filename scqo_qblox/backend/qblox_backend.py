@@ -1402,9 +1402,10 @@ class QbloxBackend(Backend):
                 f"and {n_points} sweep points x {reps} shots = {rendered} "
                 f"rendered shots (cap {_PREVIEW_MAX_RENDERED_SHOTS}; ~20k "
                 f"shots measured at 10+ minutes). The per-shot sequence "
-                f"does not change with the counts — preview it small, e.g. "
-                f"--set num_averages=2 --set num_points=5; the real run is "
-                f"unaffected")
+                f"does not change with the counts — preview it small: "
+                f"--set num_averages=2 plus this experiment's point-count "
+                f"parameter (num_points / num_readout_freq_points / ... — see "
+                f"`scqo run {name} --help`); the real run is unaffected")
         with self._thermalization_override(experiment):
             schedule = experiment.probe()  # native qblox_scheduler.Schedule
             from qblox_scheduler.backends.graph_compilation import SerialCompiler

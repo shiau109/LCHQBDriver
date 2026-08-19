@@ -145,7 +145,7 @@ def main() -> int:
                                output_dir=str(work / "compile_out"),
                                roster=roster)
         exp_cls = get("resonator_spectroscopy")
-        exp = exp_cls(backend, exp_cls.Parameters(targets=qubits, num_points=11, num_averages=2))
+        exp = exp_cls(backend, exp_cls.Parameters(targets=qubits, num_readout_freq_points=11, num_averages=2))
         # the probe reads its neutral state through the recording surface, the
         # way a Session hands it over (in-memory store: nothing persists here)
         exp.device = RecordingDevice(backend.device, roster,
