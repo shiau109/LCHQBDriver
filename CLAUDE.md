@@ -24,6 +24,10 @@ scqo_qblox/
                              #   "readout"|"flux")); all three resolve onto the SAME
                              #   qblox_scheduler DeviceElement (the channel's single target)
                              #   wraps qblox_scheduler.HardwareAgent + QuantumDevice
+  backend/_distortion.py     # flux-distortion facts -> the 4-stage QCM exp-bank dict (pure)
+  backend/apply_distortion.py  # operator CLI: python -m scqo_qblox.backend.apply_distortion
+                             #   (QbloxBackend.distortion_apply_command hands scqo's two
+                             #   cryoscopes this command line as their writeback hint)
   experiments/
     __init__.py              # imports each experiment module so @register runs (populates catalog;
                              #   completeness enforced by tests/test_experiment_registration.py)
@@ -263,6 +267,30 @@ Everything else (parameters, fitting, writeback, simulation) is inherited from `
   Python loop (one 1D detuning scan per point); `resonator_spectroscopy_power_amp` is a
   single-program FPGA sweep over Python-UNROLLED geometric amplitude blocks, giving a
   uniform-dBm axis.
+- **The cryoscope probes (2026-08-24).** Three compiler facts shape them, each measured:
+  every same-sequencer gap compiles to a `wait` that must be 0 or ≥ 4 ns; `VoltageOffset`
+  and `play` each consume an intrinsic 4 ns before that wait; and `Schedule.loop` UNROLLS
+  every TIME domain in Python anyway (schedule.py:1103), so a Python loop over durations
+  is compile-identical to a "hardware" one. Hence `qubit_ramsey_cryoscope` COMPOSES each
+  1-ns duration as `n = 4k + r`: a VoltageOffset segment of 4k ns plus a 1/2/3-sample
+  SquarePulse remainder at the same timestamp the offset returns (three waveforms total;
+  every flux wait a multiple of 4 by construction), with the frame axis a realtime PHASE
+  loop driving `ShiftClockPhase` (+360·frame — tomography, NOT qubit_ramsey's negative
+  ramp) before a fixed X90. A variable `Rxy(phi=...)` does NOT compile in a realtime loop
+  (`pulses.py:264` whitelists only voltage_offset/phase_shift/frequency). Ceiling:
+  `max_duration_ns` ≤ 512 (the READOUT QRM's 12288-instruction budget fills first;
+  640 exceeds it) — refused by name. `qubit_spectroscopy_cryoscope` is square-drive-only
+  (refuses cosine/gaussian by name; π-area amplitude from sampling the rxy DRAG envelope,
+  σ = duration/8) with the log wait axis Python-unrolled inside a realtime FREQUENCY loop.
+- **Distortion apply** (`python -m scqo_qblox.backend.apply_distortion --target q1
+  [--run <id>|--extend|--clear|--dry-run]`): accepted cryoscope facts → ONE
+  `QbloxHardwareDistortionCorrection` under
+  `hardware_options.distortion_corrections["<flux_port>-cl0.baseband"]` (flux plays on
+  the baseband IDENTITY clock — there is no `<q>.flux` clock; a real output refuses a
+  LIST, that shape is complex-channel). The 4-stage bank is hard hardware: overflow taps
+  warn LOUDLY (kept = most significant by |A|), and `--extend` merges + re-partitions
+  rather than appending. Saved via `QbloxDeviceModel.save()` (both config files);
+  compiled + pushed on the next run that plays flux — only QCM compilers apply it.
 - **Sequence preview** (`scqo run <name> --preview` → `QbloxBackend.preview`): compiles
   the probe's Schedule OFFLINE (the same `hardware_config` mutation + SerialCompiler call
   `HardwareAgent.run` makes) and writes `pulse_diagram.html` (plotly) +

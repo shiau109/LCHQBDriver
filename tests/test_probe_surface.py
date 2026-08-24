@@ -54,7 +54,12 @@ QBLOX_PROBES = sorted(
 SMALL = {"num_points": 5, "num_amp_points": 5, "num_drive_freq_points": 5,
          "num_readout_freq_points": 5, "num_flux_points": 5,
          "num_power_points": 5, "num_averages": 2,
-         "num_shots": 100, "max_amp_factor": 0.5}
+         "num_shots": 100, "max_amp_factor": 0.5,
+         # the cryoscopes (dict is field-filtered per experiment): a short
+         # 1-ns duration axis / few frames for the ramsey one, a small
+         # log-wait x detuning grid + a short square tone for the other
+         "max_duration_ns": 32, "num_frames": 4,
+         "num_wait_points": 5, "max_wait_ns": 200, "drive_len_ns": 64}
 
 
 def _params(cls):

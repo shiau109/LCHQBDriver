@@ -49,6 +49,11 @@ DENIED = {
     # here — it stays denied only because nothing has validated it on hardware.
     # Opting in later is one ClassVar, plus moving this line to CARRIERS.
     "qubit_spectroscopy_overlap": "not yet validated on hardware",
+    # both cryoscopes' Resets are real state resets at the standing bias, so
+    # active reset is physically plausible — denied until the QM twins'
+    # active-reset experience is validated on THIS backend's hardware.
+    "qubit_ramsey_cryoscope": "not yet validated on hardware",
+    "qubit_spectroscopy_cryoscope": "not yet validated on hardware",
 }
 
 #: small but legal for every probe's own Parameters minimums. Two point-count

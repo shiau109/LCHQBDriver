@@ -9,7 +9,11 @@ convention as our model (amplitude = exponential overshoot, negative = undershoo
 4-stage exp bank limit + bounds, applied via scqat's ``partition_exp_stages``.
 
 The caller keys the returned dict into ``hw_config.json``'s
-``hardware_options.distortion_corrections["<q>:fl-<q>.flux"]``. Only a DECLARED
+``hardware_options.distortion_corrections["<flux_port>-cl0.baseband"]`` (e.g.
+``"q1:fl-cl0.baseband"`` — flux operations play on the baseband IDENTITY clock;
+there is no ``<q>.flux`` clock), as exactly ONE correction object — a real
+(flux) output refuses a list, which is the complex-channel shape. The one-step
+door is ``python -m scqo_qblox.backend.apply_distortion``. Only a DECLARED
 block persists across runs: the agent's ``hardware_configuration`` is authoritative
 and recompiled every upload, so a live qcodes ``.set()`` is overwritten.
 """
