@@ -89,6 +89,14 @@ class QbloxReadoutPower(ReadoutPower):
                             acq_channel=f"S_21_{qubit_name}",
                         )
                     )
+                    # close the loop body with a real duration: the
+                    # clock restore Measure's factory appends is a
+                    # ZERO-duration parameter op and may not land on
+                    # the loop's ControlFlowReturn (the chipA
+                    # readout_frequency failure, 2026-07-26). Every
+                    # other in-loop Measure here already does this;
+                    # these two probes were the outliers.
+                    sub.add(IdlePulse(4e-9))
                 # prepared_state 1: Reset -> X -> Measure, same binning rule
                 with sub.loop(arange(0, num_shots, 1, DType.NUMBER)) as shot:
                     add_reset(sub, self, qubit_name)
@@ -105,6 +113,14 @@ class QbloxReadoutPower(ReadoutPower):
                             acq_channel=f"S_21_{qubit_name}",
                         )
                     )
+                    # close the loop body with a real duration: the
+                    # clock restore Measure's factory appends is a
+                    # ZERO-duration parameter op and may not land on
+                    # the loop's ControlFlowReturn (the chipA
+                    # readout_frequency failure, 2026-07-26). Every
+                    # other in-loop Measure here already does this;
+                    # these two probes were the outliers.
+                    sub.add(IdlePulse(4e-9))
             sub.add(IdlePulse(4e-9))
             schedule.add(sub)
         return schedule

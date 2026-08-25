@@ -33,6 +33,7 @@ from conftest import (  # noqa: E402
 )
 
 import scqo_qblox.experiments  # noqa: E402,F401  (import side effect: @register)
+from scqo_qblox.backend.qblox_backend import SELF_ACQUIRING_ATTR  # noqa: E402
 from scqo.experiments import catalog, get  # noqa: E402
 
 #: every experiment whose registered class comes from THIS driver
@@ -61,11 +62,56 @@ SMALL = {"num_points": 5, "num_amp_points": 5, "num_drive_freq_points": 5,
          "max_duration_ns": 32, "num_frames": 4,
          "num_wait_points": 5, "max_wait_ns": 200, "drive_len_ns": 64}
 
+#: applied ON TOP of SMALL, for the carriers SMALL alone cannot satisfy. Keyed
+#: by registered name so the reason lives next to the value -- a boolean over
+#: field names would have to re-derive each one.
+PER_EXPERIMENT: dict[str, dict] = {
+    # its amplitude window defaults to 0.9..1.1 and the validator wants
+    # min < max, so SMALL's DAC-safe 0.5 ceiling has to bring the floor along
+    "qubit_deterministic_benchmarking": {"min_amp_factor": 0.3,
+                                         "max_amp_factor": 0.5},
+    # RB inlines every Clifford of every sequence at every depth into ONE
+    # program: the stock 30 sequences x depth 100 is far past what this test
+    # needs (and past Q1ASM's program memory)
+    "qubit_sqrb": {"max_circuit_depth": 4, "num_random_sequences": 2},
+    # the training block is num_training_shots long and precedes the tomography
+    # schedule; the stock 2000 would dominate the compile
+    "qubit_tomography": {"gate_counts": [0, 1], "num_training_shots": 10},
+    # beta is a DRAG coefficient, not a point count -- SMALL has no spelling for it
+    "qubit_drag_equator": {"min_beta": -0.5, "max_beta": 0.5,
+                           "num_beta_points": 5},
+}
+
 
 def _params(cls):
     fields = set(cls.Parameters.model_fields)
-    return cls.Parameters(targets=["q1"],
-                          **{k: v for k, v in SMALL.items() if k in fields})
+    overrides = {k: v for k, v in SMALL.items() if k in fields}
+    overrides.update(PER_EXPERIMENT.get(cls.name, {}))
+    return cls.Parameters(targets=["q1"], **overrides)
+
+
+def _band_edges(exp, kind: str, fallback: float):
+    """A small sub-band around the fixture's parked frequency."""
+    field = "readout_freq_hz" if kind == "readout" else "drive_freq_hz"
+    freq = float(getattr(exp.device.channel("q1", kind), field) or fallback)
+    return freq - 10e6, freq + 10e6
+
+
+#: name -> {label: zero-arg builder}, for probes whose probe() acquires. Each
+#: builder must return a Schedule the cluster would really be asked to run.
+SELF_ACQUIRING_BUILDS = {
+    "broadband_qubit_spectroscopy": lambda exp: {
+        "sub-band": lambda: exp.build_sub_schedule(
+            "q1", *_band_edges(exp, "drive", 5.0e9), 5, 2)},
+    "broadband_resonator_spectroscopy": lambda exp: {
+        "sub-band": lambda: exp.build_sub_schedule(
+            "q1", *_band_edges(exp, "readout", 7.0e9), 5, 2)},
+    "qubit_drag_equator": lambda exp: {
+        "per-beta": exp.build_schedule},
+    "qubit_tomography": lambda exp: {
+        "training": exp.build_training_schedule,
+        "tomography": exp.build_tomography_schedule},
+}
 
 
 def test_the_whole_driver_catalog_is_covered():
@@ -97,8 +143,37 @@ def test_probe_compiles(tmp_path, roster, name):
     # compile, don't just build — the compiler is where the instrument's own
     # rules live (see this module's docstring). compile_probe sets sweep_axes
     # and calls probe() the way the Session does.
+    if getattr(cls, SELF_ACQUIRING_ATTR, None):
+        # Its probe() drives the cluster itself, so there is no single schedule
+        # to hand the compiler — but the PIECES it runs are still schedules, and
+        # they are what the instrument will actually see. SELF_ACQUIRING_BUILDS
+        # names them; a probe missing from that map fails the census below
+        # rather than quietly skipping, which is how ~400 lines of new probe
+        # went uncompiled when this branch was first added.
+        from qblox_scheduler.backends.graph_compilation import SerialCompiler
+
+        qd = backend._hw_agent.quantum_device
+        qd.hardware_config = backend._hw_agent.hardware_configuration
+        for label, build in SELF_ACQUIRING_BUILDS[name](exp).items():
+            compiled = SerialCompiler().compile(
+                schedule=build(), config=qd.generate_compilation_config())
+            assert compiled.operations, f"{name}: empty {label} schedule"
+        return
+
     compiled = compile_probe(backend, exp)
     assert compiled.operations, f"{name}: empty schedule"
+
+
+def test_every_self_acquiring_probe_declares_its_schedules():
+    """The map above is the census's escape hatch; keep it honest.
+
+    A probe that declares SELF_ACQUIRING_ATTR skips the ordinary compile path,
+    so if it is also absent from SELF_ACQUIRING_BUILDS it is compiled NOWHERE.
+    """
+    declared = {n for n in QBLOX_PROBES if getattr(get(n), SELF_ACQUIRING_ATTR, None)}
+    assert declared == set(SELF_ACQUIRING_BUILDS), (
+        "self-acquiring probes without a schedule map (or a stale entry): "
+        f"{declared ^ set(SELF_ACQUIRING_BUILDS)}")
 
 
 def _acquisition_bins(compiled) -> int:

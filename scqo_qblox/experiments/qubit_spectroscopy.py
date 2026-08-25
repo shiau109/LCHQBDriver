@@ -43,9 +43,11 @@ class QbloxQubitSpectroscopy(QubitSpectroscopy):
         for qubit_name in self.params.targets:
             view = self.device.channel(qubit_name, "drive")
             element = vendor_element(self, qubit_name, "drive")  # ports: vendor-only
-            center = view.drive_freq_hz
+            center = float(view.drive_freq_hz)
             drive_amp = float(view.drive_amp)  # run() parked the solved residual here
             drive_clock = f"{qubit_name}.01"
+            mw_port = element.ports.microwave
+            mw_port = mw_port() if callable(mw_port) else mw_port
             sub = Schedule(f"qubit_spec_{qubit_name}")
             with sub.loop(arange(0, reps, 1, DType.NUMBER)):
                 # endpoint form, never center +/- span/2: the scqo window is an
@@ -61,7 +63,7 @@ class QbloxQubitSpectroscopy(QubitSpectroscopy):
                     )
                 ) as freq:
                     # continuous weak drive on the microwave port (cal05 pattern)
-                    sub.add(VoltageOffset(drive_amp, 0, port=element.ports.microwave, clock=drive_clock))
+                    sub.add(VoltageOffset(drive_amp, 0, port=mw_port, clock=drive_clock))
                     sub.add(SetClockFrequency(clock=drive_clock, frequency=freq))
                     # let the qubit reach the driven steady state before measuring.
                     # This Reset is the DRIVEN DWELL, not a state reset — the CW
@@ -77,7 +79,7 @@ class QbloxQubitSpectroscopy(QubitSpectroscopy):
                     )
                     sub.add(IdlePulse(4e-9))
             # drive OFF before the next qubit / end of schedule
-            sub.add(VoltageOffset(0, 0, port=element.ports.microwave, clock=drive_clock))
+            sub.add(VoltageOffset(0, 0, port=mw_port, clock=drive_clock))
             sub.add(IdlePulse(4e-9))
             schedule.add(sub)
         return schedule

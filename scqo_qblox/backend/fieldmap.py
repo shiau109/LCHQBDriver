@@ -48,6 +48,17 @@ FIELD_BINDINGS: dict[str, dict[str, VendorBinding]] = {
                  "qubit_relaxation (thermalization_factor x T1). QM "
                  "counterpart: q.thermalization_time_ns (ns, 4 ns grid), which "
                  "overrides QUAM's derived thermalization_time_factor * T1"),
+        "drag_beta": VendorBinding(
+            path="element.rxy.beta", unit="ns",
+            convert="rxy.beta is SECONDS of derivative scaling; the view speaks "
+                    "ns (beta_s = drag_beta_ns * 1e-9) so the knob lands on the "
+                    "same numeric range as the neutral min_beta/max_beta window",
+            note="the DRAG coefficient of the SHARED rxy op, calibrated by "
+                 "qubit_drag_equator. Deliberately NOT the same quantity as the "
+                 "QM side's DragCosinePulse.alpha -- catalog marks drag_beta "
+                 "portable=False precisely so each backend may define it in its "
+                 "own convention. rxy has ONE beta, so x180 and x90 share it: "
+                 "see drag_beta_x90 in UNREALIZED"),
         "drive_amp": VendorBinding(
             path="element.spec.spec_amp", unit="",
             note="the saturation (spec) drive amplitude - the CW VoltageOffset "
@@ -163,29 +174,23 @@ FIELD_BINDINGS: dict[str, dict[str, VendorBinding]] = {
 #: dataclass attribute is still spelled ``category``; it carries the channel KIND.
 UNREALIZED: dict[str, dict[str, Unrealized]] = {
     "drive": {
-        "drag_beta": Unrealized(
-            "drive", "drag_beta",
-            "no DRAG calibration wired for Qblox yet: rxy.beta exists (VENDOR_ONLY "
-            "below) but no scqo experiment writes it here (the drag experiments are "
-            "QM-only). Promote to a real rxy.beta binding when a Qblox DRAG "
-            "experiment lands"),
         "drag_beta_x90": Unrealized(
             "drive", "drag_beta_x90",
-            "same gap as drag_beta one line up, and they promote together: rxy has a "
-            "single beta, so an independent pi/2 DRAG would need a lab element field "
-            "besides. Both land when a Qblox DRAG experiment does"),
+            "rxy carries a SINGLE beta, which drag_beta above now realizes, so an "
+            "independent pi/2 DRAG has nowhere of its own to live -- binding it to "
+            "rxy.beta would make an x90 calibration silently overwrite the x180 "
+            "one. It lands with pi_amp_x90 below, on the same lab element field"),
         "pi_amp_x90": Unrealized(
             "drive", "pi_amp_x90",
-            "the slot EXISTS -- PiHalfProperties.amp90 in scqo_qblox/elements.py -- but no "
-            "Qblox probe writes it: qubit_deterministic_benchmarking is QM-only, as "
-            "is the rest of that family (pi_pulse_error, sqrb, tomography, the drag "
-            "and flux-coherence pairs). Binding an amplitude nothing calibrates would "
-            "claim a calibration this backend cannot make, so it is DECLINED until a "
-            "Qblox probe lands. Promoting it then means moving pi_half from "
-            "FluxTunableTransmonElement up to the LCHTransmonElement base (fixed-"
-            "frequency chips need it too) and binding element.pi_half.amp90. Qblox "
-            "otherwise DERIVES X90 from rxy.amp180 as amp180*theta/180, so today "
-            "pi_amp alone governs both gate widths here"),
+            "the slot EXISTS -- PiHalfProperties.amp90 in scqo_qblox/elements.py -- "
+            "but nothing PLAYS it: Qblox DERIVES X90 from rxy.amp180 as "
+            "amp180*theta/180, so binding pi_amp_x90 to rxy.amp180 (as "
+            "amp180 = 2*pi_amp_x90) would let an x90 calibration overwrite the "
+            "calibrated pi amplitude. qubit_deterministic_benchmarking is realized "
+            "here now but REFUSES target_gate=x90 by name for exactly this reason. "
+            "Promoting means moving pi_half from FluxTunableTransmonElement up to "
+            "the LCHTransmonElement base (fixed-frequency chips need it too), "
+            "binding element.pi_half.amp90, and teaching the probes to PLAY it"),
     },
     "readout": {
         # rotation + threshold are REALIZED above (acq_rotation/acq_threshold);

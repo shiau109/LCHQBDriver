@@ -294,6 +294,42 @@ Everything else (parameters, fitting, writeback, simulation) is inherited from `
   warn LOUDLY (kept = most significant by |A|), and `--extend` merges + re-partitions
   rather than appending. Saved via `QbloxDeviceModel.save()` (both config files);
   compiled + pushed on the next run that plays flux — only QCM compilers apply it.
+- **Probes that acquire inside `probe()`** (`probe_self_acquires = "<why>"`, spelled by
+  `backend.SELF_ACQUIRING_ATTR`, same default-ALLOW polarity as scqo-qm's): the two
+  broadband sweeps, `qubit_drag_equator` and `qubit_tomography`. They step an LO or the
+  DRAG coefficient BETWEEN acquisitions, so they compile and run their own schedules and
+  hand `acquire()` a finished Dataset; `preview` refuses them by name. Three rules:
+  1. **Each exposes its schedule builders** (`build_sub_schedule`, `build_schedule`,
+     `build_training_schedule`/`build_tomography_schedule`) and is listed in
+     `tests/test_probe_surface.SELF_ACQUIRING_BUILDS`, which COMPILES every one.
+     `test_every_self_acquiring_probe_declares_its_schedules` fails a probe that is
+     absent from the map — the early-return that skipped them silently left ~400 lines
+     of probe uncompiled, in the one file whose whole point is that compiling is what
+     catches the instrument's rules.
+  2. **Deadlines come from `qblox_backend.chunk_timeout_s`**, never a hand-rolled
+     formula: it applies `_run_timeout_s`'s arithmetic to the ONE piece about to run and
+     counts the REAL thermalization. A magic 500 us shot period ignores chipA's 2.7 ms
+     reset — the underestimate issue #24 reported.
+  3. **Whatever they step, they restore in a `finally`** (LO, drive/readout clock, DRAG
+     beta), and a FAILED step raises: swallowing it measures a sub-band at the previous
+     LO and labels it with this one's frequency.
+  `broadband_qubit_spectroscopy` measures ONE target — it steps a single drive
+  port-clock's LO — and refuses a second by name; `broadband_resonator_spectroscopy`
+  legitimately reports the same feedline trace for every target, exactly as the neutral
+  `simulate()` broadcasts it.
+- **`drag_beta` is REALIZED** (`element.rxy.beta`) now that `qubit_drag_equator` lands
+  here: the view speaks **ns**, the vendor stores **seconds**. It is deliberately NOT the
+  same quantity as QM's `DragCosinePulse.alpha` — the catalog marks `drag_beta`
+  `portable=False` precisely so each backend may define it in its own convention.
+  `rxy` carries ONE beta and X90 is DERIVED from `rxy.amp180` (`amp180*theta/180`), so
+  **`pi_amp_x90` and `drag_beta_x90` stay Unrealized**: binding them to the x180 slots
+  (`amp180 = 2*pi_amp_x90`, the shared beta) would let a pi/2 calibration silently
+  overwrite the calibrated pi gate — the failure issue #24 reported on the QM side.
+  `qubit_deterministic_benchmarking` therefore reads `amp_reference_field()` and refuses
+  `target_gate=x90` in `define_sweep()`, before the neutral layer reaches for the
+  unrealized anchor and reports a bare "has no value yet". Promotion means moving
+  `pi_half` from `FluxTunableTransmonElement` up to `LCHTransmonElement`, binding
+  `element.pi_half.amp90`, and teaching the probes to PLAY it.
 - **Sequence preview** (`scqo run <name> --preview` → `QbloxBackend.preview`): compiles
   the probe's Schedule OFFLINE (the same `hardware_config` mutation + SerialCompiler call
   `HardwareAgent.run` makes) and writes `pulse_diagram.html` (plotly) +
@@ -360,5 +396,6 @@ don't over-narrow.
 | `test_mixer_calibration.py` | `scripts/calibrate_mixers.py`: the pure plan (config -> LO/NCO groups) + the AMC control flow on a `dummy_cfg` cluster (channel map, tone, sequencer snapshot/restart, cache) |
 | `test_asyncio_noise.py` | the WinError-87 shutdown suppressor: what it swallows, what it must NOT, idempotence, and that `acquire()` installs it even when the run raises |
 | `test_preview.py` | `QbloxBackend.preview`: both compiled artifacts render offline, no `_sync_att_limits` call, pinned `--out` dir overwrites in place, the rendered-shot cap refuses lab-sized schedules by name |
+| `test_new_probe_contracts.py` | the two silent-wrong-data regressions the 2026-08 probe batch shipped with: benchmarking sweeps `amp_reference_field()`'s knob and refuses a pi/2 gate BY NAME, the x90 knobs stay Unrealized, broadband-qubit refuses a second target (its resonator sibling's broadcast is pinned as CORRECT), `chunk_timeout_s` counts the reset |
 | `test_experiment_registration.py` | every experiment module has its `__init__` import line (both directions) |
 | `test_scqo_glue.py` | the `scqo` CLI works in THIS venv + the qblox factory (slow — see above) |

@@ -31,6 +31,42 @@ from scqo.fieldmap import Unrealized, VendorBinding, VendorOnly
 
 from scqo_qblox.backend.fieldmap import FIELD_BINDINGS, UNREALIZED, VENDOR_ONLY
 
+#: A probe whose ``probe()`` EXECUTES on the cluster and returns a ready Dataset
+#: (instead of a native ``Schedule``) sets this class attribute to a one-line
+#: WHY -- the truthy value is the flag, the text is the refusal reason. Same
+#: spelling and same default-ALLOW polarity as scqo-qm's ``SELF_ACQUIRING_ATTR``
+#: (the two backends are independent, so the constant is duplicated, not
+#: imported). Census in tests/test_preview.py.
+SELF_ACQUIRING_ATTR = "probe_self_acquires"
+
+
+def _self_acquires(experiment: "Experiment") -> "str | None":
+    """The declared reason this probe acquires inside ``probe()``, or None."""
+    return getattr(type(experiment), SELF_ACQUIRING_ATTR, None)
+
+
+@contextmanager
+def _relaxed_grid_tolerance(tolerance_ns: float = 0.05):
+    """Widen ``qblox_scheduler``'s grid-time tolerance FOR ONE COMPILE.
+
+    The vendor default is 1.1e-3 ns, which rejects durations that float
+    arithmetic lands a picosecond off the 1 ns grid -- the sub-band sweeps and
+    the Clifford sequences both build their timings by accumulation, so they
+    trip it. The constant is a module GLOBAL, so setting it and walking away
+    would quietly relax validation for every later experiment in the process
+    (and this repo has already lost a run to a schedule that compiled clean
+    offline and died on the cluster). Restore it on the way out, always.
+    """
+    import qblox_scheduler.backends.qblox.constants as qblox_constants
+
+    previous = qblox_constants.GRID_TIME_TOLERANCE_TIME
+    qblox_constants.GRID_TIME_TOLERANCE_TIME = tolerance_ns
+    try:
+        yield
+    finally:
+        qblox_constants.GRID_TIME_TOLERANCE_TIME = previous
+
+
 if TYPE_CHECKING:
     from scqo.experiment import Experiment
     from scqo.roster import Roster
@@ -148,6 +184,24 @@ def _run_timeout_s(experiment: "Experiment") -> int:
                 est = float(reps) * points * (_max_thermalization_s(experiment) + 1e-3)
     except Exception:
         est = 0.0
+    seconds = max(float(_RUN_TIMEOUT_S), 2.0 * est)
+    return int(math.ceil(seconds / 60.0)) * 60
+
+
+def chunk_timeout_s(experiment: "Experiment", *, shots: int, points: int) -> int:
+    """Deadline for ONE sub-run of a probe that acquires inside ``probe()``.
+
+    :func:`_run_timeout_s` estimates the WHOLE sweep from ``sweep_axes``; a
+    self-acquiring probe launches that sweep in pieces and needs the same
+    arithmetic applied to the piece it is about to run. Same shape, same
+    doubling, same floor and — the part every hand-rolled formula in these
+    probes got wrong — the same REAL thermalization time instead of a magic
+    per-shot period. A 300 us reset x 2000 shots is ten minutes on its own,
+    which is precisely the underestimate issue #24 reported.
+
+    Public (no leading underscore) because the probes are its callers.
+    """
+    est = float(shots) * max(1, int(points)) * (_max_thermalization_s(experiment) + 1e-3)
     seconds = max(float(_RUN_TIMEOUT_S), 2.0 * est)
     return int(math.ceil(seconds / 60.0)) * 60
 
@@ -675,32 +729,33 @@ class QbloxDriveChannel(_QbloxChannelView, make_view_base("drive")):
         self._write_output_att(port_clock, att)
         _write(self._element.spec, "spec_amp", amp)
 
-    # ------------------------------------------------------- unrealized knobs
-    # drag_beta is Unrealized on Qblox (fieldmap.UNREALIZED): rxy.beta exists but
-    # no scqo experiment calibrates it here yet. Concrete raising pair required
-    # because make_view_base declares the abstract property for every knob.
-    _DRAG_BETA_UNREALIZED = (
-        "drag_beta is Unrealized on the Qblox backend: no DRAG calibration wired "
-        "here yet (the drag experiments are QM-only)"
-    )
-
+    # ------------------------------------------------------------ DRAG (pi)
+    # rxy.beta is the derivative scaling in SECONDS; the neutral knob speaks ns
+    # so it lands on the same numeric range as the shell's min_beta/max_beta
+    # window (see fieldmap.FIELD_BINDINGS["drive"]["drag_beta"]).
     @property
     def drag_beta(self) -> float:
-        raise NotImplementedError(f"{self.name}: {self._DRAG_BETA_UNREALIZED}")
+        val = _read(self._element.rxy, "beta")
+        return float(val) * 1e9 if val is not None else 0.0
 
     @drag_beta.setter
     def drag_beta(self, value: float) -> None:
-        raise NotImplementedError(f"{self.name}: {self._DRAG_BETA_UNREALIZED}")
+        _write(self._element.rxy, "beta", float(value) * 1e-9)
 
-    # The pi/2 pair. Qblox DERIVES X90 from rxy.amp180 (amp180*theta/180), so
-    # pi_amp alone governs both gate widths here; the independent slot exists
-    # (PiHalfProperties.amp90) but no Qblox probe calibrates it, so binding it
-    # would claim a calibration this backend cannot make. See fieldmap.UNREALIZED
-    # for the promotion condition.
+    # ------------------------------------------------------- unrealized knobs
+    # The pi/2 pair. Qblox DERIVES X90 from rxy.amp180 (amp180*theta/180) and
+    # rxy carries a SINGLE beta, so neither x90 knob has a home of its own that
+    # anything PLAYS. Binding them to the x180 slots (amp180 = 2*pi_amp_x90,
+    # the shared beta) would let an x90 calibration silently overwrite the
+    # calibrated pi gate -- the failure issue #24 reported on the QM side.
+    # Concrete raising pairs required because make_view_base declares the
+    # abstract property for every knob. See fieldmap.UNREALIZED for the
+    # promotion condition.
     _X90_UNREALIZED = (
         "the pi/2 gate has no independently calibrated knob on the Qblox backend: "
-        "X90 is derived from rxy.amp180, and qubit_deterministic_benchmarking (which "
-        "calibrates it in its own right) is QM-only. Set pi_amp instead"
+        "X90 is derived from rxy.amp180 and rxy has one shared beta, so writing "
+        "either x90 knob would overwrite the x180 calibration. Set pi_amp / "
+        "drag_beta instead"
     )
 
     @property
@@ -1340,10 +1395,25 @@ class QbloxBackend(Backend):
         from scqo_qblox.experiments._reset import check_reset_method
 
         check_reset_method(experiment)
+
         # Before probe(): the probe plays the amplitude this may re-solve.
         self._sync_att_limits()
-        with self._thermalization_override(experiment):
-            schedule = experiment.probe()  # native qblox_scheduler.Schedule
+        with self._thermalization_override(experiment), _relaxed_grid_tolerance():
+            # A self-acquiring probe compiles and RUNS its own schedules inside
+            # probe() (it has to: it steps LO/DRAG between acquisitions), so it
+            # hands back the finished Dataset. The declared attribute decides,
+            # not the return type -- preview() reads the same flag, and an
+            # undeclared probe returning a Dataset is a bug worth surfacing.
+            res = experiment.probe()
+            reason = _self_acquires(experiment)
+            if reason:
+                if not isinstance(res, xr.Dataset):
+                    raise TypeError(
+                        f"{type(experiment).__name__} declares "
+                        f"{SELF_ACQUIRING_ATTR} ({reason}) but probe() returned "
+                        f"{type(res).__name__}, not a Dataset")
+                return res
+            schedule = res  # native qblox_scheduler.Schedule
             timeout_s = _run_timeout_s(experiment)  # after probe(): needs the shot periods
             # retrieve_acquisition() re-waits against the coordinator's OWN
             # timeout parameter (default 60 s) — keep that second gate no
@@ -1400,8 +1470,15 @@ class QbloxBackend(Backend):
                 f"the qblox backend has no simulator — preview option(s) "
                 f"{', '.join(sorted(options))} are not realized here (the "
                 f"compiled pulse diagram is already the full picture)")
-        check_reset_method(experiment)
         name = getattr(type(experiment), "name", type(experiment).__name__)
+        reason = _self_acquires(experiment)
+        if reason:
+            raise ValueError(
+                f"{name} cannot be previewed on the Qblox backend: {reason} — "
+                f"it acquires inside probe(), so there is no single standalone "
+                f"schedule to render; run it for real, or preview another "
+                f"experiment")
+        check_reset_method(experiment)
         # The rendered-shot guard runs BEFORE probe(): the averaging rides a
         # LoopOperation inside the schedule (verified by the 61,201-pulse
         # profile = points x averages x 3 exactly), so the schedule object
@@ -1423,7 +1500,7 @@ class QbloxBackend(Backend):
                 f"--set num_averages=2 plus this experiment's point-count "
                 f"parameter (num_points / num_readout_freq_points / ... — see "
                 f"`scqo run {name} --help`); the real run is unaffected")
-        with self._thermalization_override(experiment):
+        with self._thermalization_override(experiment), _relaxed_grid_tolerance():
             schedule = experiment.probe()  # native qblox_scheduler.Schedule
             from qblox_scheduler.backends.graph_compilation import SerialCompiler
 
@@ -1482,6 +1559,9 @@ class QbloxBackend(Backend):
 
         qubits = list(experiment.params.targets)  # type: ignore[attr-defined]
         axes = {name: np.asarray(values) for name, values in experiment.sweep_axes.items()}
+        readout = getattr(experiment, "readout_coords", None)
+        if readout is not None:
+            axes.update({name: np.asarray(values) for name, values in readout().items()})
         shape = tuple(len(v) for v in axes.values())
         rows: list = []
         discriminated = False
