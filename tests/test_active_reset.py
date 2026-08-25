@@ -53,6 +53,11 @@ DENIED = {
     # active reset is physically plausible — denied until the QM twins'
     # active-reset experience is validated on THIS backend's hardware.
     "qubit_ramsey_cryoscope": "not yet validated on hardware",
+    # sequence-identical to plain qubit_ramsey (a CARRIER) apart from the frame
+    # sweep, which touches neither the Reset nor the readout — so active reset is
+    # physically valid here and this is a HARDWARE-VALIDATION gate, not a physics
+    # one. The QM twin already opts in; that repo has no pending-hardware bar.
+    "qubit_ramsey_phasor": "not yet validated on hardware",
     "qubit_spectroscopy_cryoscope": "not yet validated on hardware",
 }
 
