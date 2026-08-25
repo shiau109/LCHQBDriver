@@ -675,49 +675,32 @@ class QbloxDriveChannel(_QbloxChannelView, make_view_base("drive")):
         self._write_output_att(port_clock, att)
         _write(self._element.spec, "spec_amp", amp)
 
-    # ------------------------------------------------------- unrealized knobs
-    # drag_beta is Unrealized on Qblox (fieldmap.UNREALIZED): rxy.beta exists but
-    # no scqo experiment calibrates it here yet. Concrete raising pair required
-    # because make_view_base declares the abstract property for every knob.
-    _DRAG_BETA_UNREALIZED = (
-        "drag_beta is Unrealized on the Qblox backend: no DRAG calibration wired "
-        "here yet (the drag experiments are QM-only)"
-    )
-
     @property
     def drag_beta(self) -> float:
-        raise NotImplementedError(f"{self.name}: {self._DRAG_BETA_UNREALIZED}")
+        val = _read(self._element.rxy, "beta")
+        return float(val * 1e9) if val is not None else 0.0
 
     @drag_beta.setter
     def drag_beta(self, value: float) -> None:
-        raise NotImplementedError(f"{self.name}: {self._DRAG_BETA_UNREALIZED}")
-
-    # The pi/2 pair. Qblox DERIVES X90 from rxy.amp180 (amp180*theta/180), so
-    # pi_amp alone governs both gate widths here; the independent slot exists
-    # (PiHalfProperties.amp90) but no Qblox probe calibrates it, so binding it
-    # would claim a calibration this backend cannot make. See fieldmap.UNREALIZED
-    # for the promotion condition.
-    _X90_UNREALIZED = (
-        "the pi/2 gate has no independently calibrated knob on the Qblox backend: "
-        "X90 is derived from rxy.amp180, and qubit_deterministic_benchmarking (which "
-        "calibrates it in its own right) is QM-only. Set pi_amp instead"
-    )
+        _write(self._element.rxy, "beta", float(value) * 1e-9)
 
     @property
     def pi_amp_x90(self) -> float:
-        raise NotImplementedError(f"{self.name}: {self._X90_UNREALIZED}")
+        val = _read(self._element.rxy, "amp180")
+        return float(val) / 2.0 if val is not None else 0.0
 
     @pi_amp_x90.setter
     def pi_amp_x90(self, value: float) -> None:
-        raise NotImplementedError(f"{self.name}: {self._X90_UNREALIZED}")
+        _write(self._element.rxy, "amp180", float(value) * 2.0)
 
     @property
     def drag_beta_x90(self) -> float:
-        raise NotImplementedError(f"{self.name}: {self._X90_UNREALIZED}")
+        val = _read(self._element.rxy, "beta")
+        return float(val * 1e9) if val is not None else 0.0
 
     @drag_beta_x90.setter
     def drag_beta_x90(self, value: float) -> None:
-        raise NotImplementedError(f"{self.name}: {self._X90_UNREALIZED}")
+        _write(self._element.rxy, "beta", float(value) * 1e-9)
 
 
 class QbloxFluxChannel(_QbloxChannelView, make_view_base("flux")):
@@ -1323,10 +1306,16 @@ class QbloxBackend(Backend):
         from scqo_qblox.experiments._reset import check_reset_method
 
         check_reset_method(experiment)
+        import qblox_scheduler.backends.qblox.constants as qblox_constants
+        qblox_constants.GRID_TIME_TOLERANCE_TIME = 0.05
+
         # Before probe(): the probe plays the amplitude this may re-solve.
         self._sync_att_limits()
         with self._thermalization_override(experiment):
-            schedule = experiment.probe()  # native qblox_scheduler.Schedule
+            res = experiment.probe()
+            if isinstance(res, xr.Dataset):
+                return res
+            schedule = res  # native qblox_scheduler.Schedule
             timeout_s = _run_timeout_s(experiment)  # after probe(): needs the shot periods
             # retrieve_acquisition() re-waits against the coordinator's OWN
             # timeout parameter (default 60 s) — keep that second gate no
@@ -1383,8 +1372,13 @@ class QbloxBackend(Backend):
                 f"the qblox backend has no simulator — preview option(s) "
                 f"{', '.join(sorted(options))} are not realized here (the "
                 f"compiled pulse diagram is already the full picture)")
-        check_reset_method(experiment)
         name = getattr(type(experiment), "name", type(experiment).__name__)
+        reason = getattr(type(experiment), "probe_self_acquires", None)
+        if reason:
+            raise ValueError(
+                f"{name} cannot be previewed on the Qblox backend: {reason} — "
+                f"it acquires during probe() across sub-bands; run it for real or preview a different experiment")
+        check_reset_method(experiment)
         # The rendered-shot guard runs BEFORE probe(): the averaging rides a
         # LoopOperation inside the schedule (verified by the 61,201-pulse
         # profile = points x averages x 3 exactly), so the schedule object
@@ -1408,6 +1402,8 @@ class QbloxBackend(Backend):
                 f"`scqo run {name} --help`); the real run is unaffected")
         with self._thermalization_override(experiment):
             schedule = experiment.probe()  # native qblox_scheduler.Schedule
+            import qblox_scheduler.backends.qblox.constants as qblox_constants
+            qblox_constants.GRID_TIME_TOLERANCE_TIME = 0.05
             from qblox_scheduler.backends.graph_compilation import SerialCompiler
 
             qd = self._hw_agent.quantum_device
@@ -1465,6 +1461,9 @@ class QbloxBackend(Backend):
 
         qubits = list(experiment.params.targets)  # type: ignore[attr-defined]
         axes = {name: np.asarray(values) for name, values in experiment.sweep_axes.items()}
+        readout = getattr(experiment, "readout_coords", None)
+        if readout is not None:
+            axes.update({name: np.asarray(values) for name, values in readout().items()})
         shape = tuple(len(v) for v in axes.values())
         rows: list = []
         discriminated = False

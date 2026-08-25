@@ -3,6 +3,8 @@
 Add a line here for each new experiment module so its ``@register`` runs.
 """
 
+from . import qubit_deterministic_benchmarking  # noqa: F401  (import side effect: @register)
+from . import qubit_drag_equator  # noqa: F401  (import side effect: @register)
 from . import qubit_echo  # noqa: F401  (import side effect: @register)
 from . import qubit_parity_switch_continuous  # noqa: F401  (import side effect: @register)
 from . import qubit_parity_switch_discrete  # noqa: F401  (import side effect: @register)
@@ -12,9 +14,12 @@ from . import qubit_relaxation  # noqa: F401  (import side effect: @register)
 from . import qubit_spectroscopy  # noqa: F401  (import side effect: @register)
 from . import qubit_spectroscopy_flux_pulse  # noqa: F401  (import side effect: @register)
 from . import qubit_spectroscopy_overlap  # noqa: F401  (import side effect: @register)
+from . import qubit_sqrb  # noqa: F401  (import side effect: @register)
 from . import qubit_thermal_population  # noqa: F401  (import side effect: @register)
+from . import qubit_tomography  # noqa: F401  (import side effect: @register)
 from . import readout_frequency  # noqa: F401  (import side effect: @register)
 from . import readout_power  # noqa: F401  (import side effect: @register)
+from . import broadband_qubit_spectroscopy  # noqa: F401  (import side effect: @register)
 from . import broadband_resonator_spectroscopy  # noqa: F401  (import side effect: @register)
 from . import resonator_spectroscopy  # noqa: F401  (import side effect: @register)
 from . import resonator_spectroscopy_flux  # noqa: F401  (import side effect: @register)
@@ -23,11 +28,15 @@ from . import resonator_spectroscopy_power_amp  # noqa: F401  (import side effec
 from . import single_shot_readout  # noqa: F401  (import side effect: @register)
 
 __all__ = [
+    "broadband_qubit_spectroscopy",
     "broadband_resonator_spectroscopy",
+    "qubit_deterministic_benchmarking",
+    "qubit_drag_equator",
     "resonator_spectroscopy",
     "qubit_spectroscopy",
     "qubit_spectroscopy_flux_pulse",
     "qubit_spectroscopy_overlap",
+    "qubit_sqrb",
     "qubit_ramsey",
     "qubit_power_rabi",
     "resonator_spectroscopy_flux",
@@ -38,6 +47,7 @@ __all__ = [
     "qubit_relaxation",
     "qubit_echo",
     "qubit_thermal_population",
+    "qubit_tomography",
     "qubit_parity_switch_continuous",
     "qubit_parity_switch_discrete",
     "single_shot_readout",

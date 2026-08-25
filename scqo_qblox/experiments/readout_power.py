@@ -89,6 +89,7 @@ class QbloxReadoutPower(ReadoutPower):
                             acq_channel=f"S_21_{qubit_name}",
                         )
                     )
+                    sub.add(IdlePulse(4e-9))
                 # prepared_state 1: Reset -> X -> Measure, same binning rule
                 with sub.loop(arange(0, num_shots, 1, DType.NUMBER)) as shot:
                     add_reset(sub, self, qubit_name)
@@ -105,6 +106,7 @@ class QbloxReadoutPower(ReadoutPower):
                             acq_channel=f"S_21_{qubit_name}",
                         )
                     )
+                    sub.add(IdlePulse(4e-9))
             sub.add(IdlePulse(4e-9))
             schedule.add(sub)
         return schedule

@@ -1,7 +1,7 @@
-"""Qblox broadband resonator spectroscopy — supplies only ``probe()``.
+"""Qblox broadband qubit spectroscopy — supplies only ``probe()``.
 
 Parameters, fitting, simulation are inherited from
-``scqo.experiments.BroadbandResonatorSpectroscopy``.
+``scqo.experiments.BroadbandQubitSpectroscopy``.
 """
 
 from __future__ import annotations
@@ -11,7 +11,10 @@ import numpy as np
 import xarray as xr
 
 from scqo import register
-from scqo.experiments import BroadbandResonatorSpectroscopy
+from scqo.experiments import BroadbandQubitSpectroscopy
+
+from ._reset import add_reset
+from ._vendor import vendor_element
 
 
 def _read(container: Any, param: str) -> Any:
@@ -95,42 +98,64 @@ def _stitch_subbands(
 
 
 @register
-class QbloxBroadbandResonatorSpectroscopy(BroadbandResonatorSpectroscopy):
-    """Build and execute wideband resonator spectroscopy across stepped LO sub-bands on Qblox."""
+class QbloxBroadbandQubitSpectroscopy(BroadbandQubitSpectroscopy):
+    """Build and execute wideband two-tone qubit spectroscopy across stepped drive LOs on Qblox."""
 
     # preview opt-out (backend.SELF_ACQUIRING_ATTR): truthy reason = refuse
-    probe_self_acquires = "broadband spectroscopy steps LO frequencies across sub-bands"
+    probe_self_acquires = "broadband qubit spectroscopy steps drive LO frequencies across sub-bands"
 
-    @staticmethod
     def build_sub_schedule(
-        primary_qubit: str, f_start: float, f_stop: float, n_pts: int, num_averages: int
+        self,
+        target: str,
+        f_start: float,
+        f_stop: float,
+        n_pts: int,
+        reps: int,
     ) -> Any:
-        """Build a single-segment 1D frequency sweep schedule."""
+        """Build a single-segment 1D frequency sweep schedule for qubit spectroscopy."""
         from qblox_scheduler import Schedule
-        from qblox_scheduler.operations import IdlePulse, Measure
+        from qblox_scheduler.operations import (
+            IdlePulse,
+            Measure,
+            SetClockFrequency,
+            VoltageOffset,
+        )
         from qblox_scheduler.operations.loop_domains import DType, arange, linspace
 
-        schedule = Schedule(f"broadband_res_spec_{primary_qubit}")
-        with schedule.loop(arange(0, num_averages, 1, DType.NUMBER)):
+        view = self.device.channel(target, "drive")
+        element = vendor_element(self, target, "drive")
+        drive_amp = float(view.drive_amp)
+        drive_clock = f"{target}.01"
+        mw_port = element.ports.microwave
+        mw_port = mw_port() if callable(mw_port) else mw_port
+
+        schedule = Schedule(f"broadband_qubit_spec_{target}")
+        with schedule.loop(arange(0, reps, 1, DType.NUMBER)):
             with schedule.loop(
                 linspace(f_start, f_stop, n_pts, dtype=DType.FREQUENCY)
             ) as freq:
+                # Continuous weak drive on the microwave port
+                schedule.add(VoltageOffset(drive_amp, 0, port=mw_port, clock=drive_clock))
+                schedule.add(SetClockFrequency(clock=drive_clock, frequency=freq))
+                add_reset(schedule, self, target)
                 schedule.add(
                     Measure(
-                        primary_qubit,
-                        freq=freq,
-                        coords={f"frequency_{primary_qubit}": freq},
-                        acq_channel=f"S_21_{primary_qubit}",
+                        target,
+                        coords={f"frequency_{target}": freq},
+                        acq_channel=f"S_21_{target}",
                     )
                 )
-                schedule.add(IdlePulse(10e-6))
+                schedule.add(IdlePulse(4e-9))
+        # Drive OFF before end of schedule
+        schedule.add(VoltageOffset(0, 0, port=mw_port, clock=drive_clock))
+        schedule.add(IdlePulse(4e-9))
         return schedule
 
     def probe(self) -> xr.Dataset:
         primary_target = self.params.targets[0]
-        chan_name = self.device.roster.default_channel(primary_target, "readout")
+        chan_name = self.device.roster.default_channel(primary_target, "drive")
         view = self.backend.device.component(chan_name)
-        port_clock = view._port_clock()
+        drive_port_clock = getattr(view, "_drive_port_clock", getattr(view, "_port_clock", None))()
 
         hw_agent = self.backend._hw_agent
         hw_cfg = hw_agent.hardware_configuration
@@ -140,21 +165,21 @@ class QbloxBroadbandResonatorSpectroscopy(BroadbandResonatorSpectroscopy):
             opts.modulation_frequencies = {}
             mf = opts.modulation_frequencies
 
-        mf_entry = mf.get(port_clock)
+        mf_entry = mf.get(drive_port_clock)
         if isinstance(mf_entry, dict):
             orig_lo = mf_entry.get("lo_freq")
         else:
             orig_lo = getattr(mf_entry, "lo_freq", None)
 
-        # Save original readout clock frequencies for all qubits
-        orig_readout_clocks: dict[str, float] = {}
-        for q_name in self.device.roster.modes():
+        # Save original drive clock frequencies for all targets
+        orig_drive_clocks: dict[str, float] = {}
+        for q_name in self.params.targets:
             try:
-                ch_name = self.device.roster.default_channel(q_name, "readout")
+                ch_name = self.device.roster.default_channel(q_name, "drive")
                 el = self.backend.device.component(ch_name)._element
-                val = _read(el.clock_freqs, "readout")
+                val = _read(el.clock_freqs, "f01")
                 if val is not None:
-                    orig_readout_clocks[q_name] = float(val)
+                    orig_drive_clocks[q_name] = float(val)
             except Exception:
                 continue
 
@@ -193,7 +218,7 @@ class QbloxBroadbandResonatorSpectroscopy(BroadbandResonatorSpectroscopy):
                 n_pts = max(2, int(round(pts_per_lo * (slice_span / span_per_lo))))
                 rf_seg = np.linspace(f_a, f_b, n_pts)
 
-                # Update LO frequency in hardware config for this sub-band
+                # Update drive LO frequency in hardware config for this sub-band
                 if isinstance(mf_entry, dict):
                     mf_entry["lo_freq"] = lo
                 elif hasattr(mf_entry, "lo_freq"):
@@ -202,16 +227,16 @@ class QbloxBroadbandResonatorSpectroscopy(BroadbandResonatorSpectroscopy):
                     try:
                         from qblox_scheduler.backends.types.qblox import ModulationFrequencies
 
-                        mf[port_clock] = ModulationFrequencies(lo_freq=lo)
+                        mf[drive_port_clock] = ModulationFrequencies(lo_freq=lo)
                     except Exception:
-                        mf[port_clock] = {"lo_freq": lo}
+                        mf[drive_port_clock] = {"lo_freq": lo}
 
-                # Synchronize base readout clock frequency to f_a (initial NCO = f_a - lo = min_if)
-                for q_name in orig_readout_clocks:
+                # Synchronize base drive clock frequency to f_a (initial NCO = f_a - lo = min_if)
+                for q_name in orig_drive_clocks:
                     try:
-                        ch_name = self.device.roster.default_channel(q_name, "readout")
+                        ch_name = self.device.roster.default_channel(q_name, "drive")
                         el = self.backend.device.component(ch_name)._element
-                        _write(el.clock_freqs, "readout", f_a)
+                        _write(el.clock_freqs, "f01", f_a)
                     except Exception:
                         pass
 
@@ -228,7 +253,7 @@ class QbloxBroadbandResonatorSpectroscopy(BroadbandResonatorSpectroscopy):
                     vals = np.asarray(raw_sub[key].values).squeeze()
                     subband_data.append((rf_seg, vals))
         finally:
-            # Restore original LO setting
+            # Restore original drive LO setting
             if isinstance(mf_entry, dict):
                 mf_entry["lo_freq"] = orig_lo
             elif hasattr(mf_entry, "lo_freq"):
@@ -237,16 +262,16 @@ class QbloxBroadbandResonatorSpectroscopy(BroadbandResonatorSpectroscopy):
                 try:
                     from qblox_scheduler.backends.types.qblox import ModulationFrequencies
 
-                    mf[port_clock] = ModulationFrequencies(lo_freq=orig_lo)
+                    mf[drive_port_clock] = ModulationFrequencies(lo_freq=orig_lo)
                 except Exception:
-                    mf[port_clock] = {"lo_freq": orig_lo}
+                    mf[drive_port_clock] = {"lo_freq": orig_lo}
 
-            # Restore original readout clock frequencies
-            for q_name, orig_clk in orig_readout_clocks.items():
+            # Restore original drive clock frequencies
+            for q_name, orig_clk in orig_drive_clocks.items():
                 try:
-                    ch_name = self.device.roster.default_channel(q_name, "readout")
+                    ch_name = self.device.roster.default_channel(q_name, "drive")
                     el = self.backend.device.component(ch_name)._element
-                    _write(el.clock_freqs, "readout", orig_clk)
+                    _write(el.clock_freqs, "f01", orig_clk)
                 except Exception:
                     pass
 

@@ -54,13 +54,21 @@ QBLOX_PROBES = sorted(
 SMALL = {"num_points": 5, "num_amp_points": 5, "num_drive_freq_points": 5,
          "num_readout_freq_points": 5, "num_flux_points": 5,
          "num_power_points": 5, "num_averages": 2,
-         "num_shots": 100, "max_amp_factor": 0.5}
+         "num_shots": 100}
 
 
 def _params(cls):
     fields = set(cls.Parameters.model_fields)
-    return cls.Parameters(targets=["q1"],
-                          **{k: v for k, v in SMALL.items() if k in fields})
+    overrides = {k: v for k, v in SMALL.items() if k in fields}
+    if cls.name == "qubit_power_rabi" or "max_amp_factor" in fields and cls.name != "qubit_deterministic_benchmarking":
+        overrides["max_amp_factor"] = 0.5
+    if cls.name == "qubit_sqrb":
+        overrides.update({"max_circuit_depth": 4, "num_random_sequences": 2})
+    if cls.name == "qubit_tomography":
+        overrides.update({"gate_counts": [0, 1], "num_training_shots": 10, "num_averages": 2})
+    if cls.name == "qubit_drag_equator":
+        overrides.update({"min_beta": -0.5, "max_beta": 0.5, "num_beta_points": 5})
+    return cls.Parameters(targets=["q1"], **overrides)
 
 
 def test_the_whole_driver_catalog_is_covered():
@@ -92,6 +100,22 @@ def test_probe_compiles(tmp_path, roster, name):
     # compile, don't just build — the compiler is where the instrument's own
     # rules live (see this module's docstring). compile_probe sets sweep_axes
     # and calls probe() the way the Session does.
+    if getattr(cls, "probe_self_acquires", None):
+        from qblox_scheduler.backends.graph_compilation import SerialCompiler
+
+        builder = getattr(exp, "build_sub_schedule", None)
+        if builder is not None:
+            if "resonator" in name:
+                freq = float(exp.device.channel("q1", "readout").readout_freq_hz or 7.0e9)
+            else:
+                freq = float(exp.device.channel("q1", "drive").drive_freq_hz or 5.0e9)
+            sub = builder("q1", freq - 10e6, freq + 10e6, 5, 2)
+            qd = backend._hw_agent.quantum_device
+            qd.hardware_config = backend._hw_agent.hardware_configuration
+            compiled = SerialCompiler().compile(schedule=sub, config=qd.generate_compilation_config())
+            assert compiled.operations, f"{name}: empty sub-schedule"
+        return
+
     compiled = compile_probe(backend, exp)
     assert compiled.operations, f"{name}: empty schedule"
 

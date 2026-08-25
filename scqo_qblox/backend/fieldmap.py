@@ -48,6 +48,14 @@ FIELD_BINDINGS: dict[str, dict[str, VendorBinding]] = {
                  "qubit_relaxation (thermalization_factor x T1). QM "
                  "counterpart: q.thermalization_time_ns (ns, 4 ns grid), which "
                  "overrides QUAM's derived thermalization_time_factor * T1"),
+        "drag_beta": VendorBinding(
+            path="element.rxy.beta", unit="",
+            note="DRAG correction coefficient for X/Y rotations, calibrated by qubit_drag_equator"),
+        "pi_amp_x90": VendorBinding(
+            path="element.rxy.amp180", unit="",
+            convert="amp180 = 2 * pi_amp_x90",
+            coupled=("pi_amp",),
+            note="calibrated by qubit_deterministic_benchmarking for x90 gates; updates rxy.amp180 = 2 * pi_amp_x90"),
         "drive_amp": VendorBinding(
             path="element.spec.spec_amp", unit="",
             note="the saturation (spec) drive amplitude - the CW VoltageOffset "
@@ -163,29 +171,10 @@ FIELD_BINDINGS: dict[str, dict[str, VendorBinding]] = {
 #: dataclass attribute is still spelled ``category``; it carries the channel KIND.
 UNREALIZED: dict[str, dict[str, Unrealized]] = {
     "drive": {
-        "drag_beta": Unrealized(
-            "drive", "drag_beta",
-            "no DRAG calibration wired for Qblox yet: rxy.beta exists (VENDOR_ONLY "
-            "below) but no scqo experiment writes it here (the drag experiments are "
-            "QM-only). Promote to a real rxy.beta binding when a Qblox DRAG "
-            "experiment lands"),
         "drag_beta_x90": Unrealized(
             "drive", "drag_beta_x90",
-            "same gap as drag_beta one line up, and they promote together: rxy has a "
-            "single beta, so an independent pi/2 DRAG would need a lab element field "
-            "besides. Both land when a Qblox DRAG experiment does"),
-        "pi_amp_x90": Unrealized(
-            "drive", "pi_amp_x90",
-            "the slot EXISTS -- PiHalfProperties.amp90 in scqo_qblox/elements.py -- but no "
-            "Qblox probe writes it: qubit_deterministic_benchmarking is QM-only, as "
-            "is the rest of that family (pi_pulse_error, sqrb, tomography, the drag "
-            "and flux-coherence pairs). Binding an amplitude nothing calibrates would "
-            "claim a calibration this backend cannot make, so it is DECLINED until a "
-            "Qblox probe lands. Promoting it then means moving pi_half from "
-            "FluxTunableTransmonElement up to the LCHTransmonElement base (fixed-"
-            "frequency chips need it too) and binding element.pi_half.amp90. Qblox "
-            "otherwise DERIVES X90 from rxy.amp180 as amp180*theta/180, so today "
-            "pi_amp alone governs both gate widths here"),
+            "the slot EXISTS -- PiHalfProperties.drag_beta in scqo_qblox/elements.py -- but no "
+            "Qblox experiment calibrates an independent X90 DRAG coefficient; rxy.beta governs both"),
     },
     "readout": {
         # rotation + threshold are REALIZED above (acq_rotation/acq_threshold);

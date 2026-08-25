@@ -93,3 +93,17 @@ def test_preview_refuses_an_oversized_render(tmp_path, roster):
         backend.preview(exp, out_dir)
     assert "--set num_averages=2" in str(excinfo.value)  # names the remedy
     assert not out_dir.exists()
+
+
+def test_preview_refuses_self_acquiring_probes(tmp_path, roster):
+    """Self-acquiring probes step hardware parameters across sub-bands in Python
+    and have no single schedule to preview."""
+    cls = get("broadband_resonator_spectroscopy")
+    backend = make_backend(tmp_path, roster)
+    exp = make_experiment(cls, backend, roster,
+                          cls.Parameters(targets=["q1"]))
+    exp.sweep_axes = exp.define_sweep()
+    out_dir = tmp_path / "prev"
+    with pytest.raises(ValueError, match="cannot be previewed"):
+        backend.preview(exp, out_dir)
+    assert not out_dir.exists()
