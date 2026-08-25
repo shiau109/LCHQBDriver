@@ -9,7 +9,8 @@ device tree: read neutral fields -> run experiments -> fit -> write results back
 save in vendor format -> reload and compare. Everything happens on a temporary copy;
 your original files are never opened for writing.
 
-Needs an environment with qblox_scheduler (lab: ``conda activate LCHQB``); scqo/scqat
+Needs an environment with qblox_scheduler (this repo's own ``.venv``, or the lab's
+``.venv-qblox``); scqo/scqat
 are picked up from the sibling repos automatically if not installed.
 """
 
@@ -57,8 +58,8 @@ def main() -> int:
         raise SystemExit(
             f"missing package: {err.name}\n"
             "This self-test needs the Qblox stack. Either install it into this environment:\n"
-            "    uv pip install --python <your-venv-python> -e D:/github/LCHQBDriver\n"
-            "or activate an environment that has it (lab: conda activate LCHQB)."
+            "    uv pip install --python <your-venv-python> -e .\n"
+            "or activate an environment that already has it (the lab uses .venv-qblox)."
         )
 
     qd = QuantumDevice.from_json_file(str(work / "dut_config.json"))

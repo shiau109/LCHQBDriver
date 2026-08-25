@@ -2,7 +2,7 @@
 name = "scqo-qblox"
 version = "3.1.0"
 description = "Qblox backend for the scqo instrument-agnostic experiment API"
-readme = "CLAUDE.md"
+readme = "README.md"
 requires-python = ">=3.10,<3.13"
 license = { text = "BSD-3-Clause" }
 dependencies = [
@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 # GOAL 1 — independence: this list contains NO Quantum Machines packages
-# (no qm-qua, quam, quam-builder, qualibrate, qualibration-libs). LCHQBDriver
+# (no qm-qua, quam, quam-builder, qualibrate, qualibration-libs). scqo-qblox
 # imports only `scqo` (vendor-free) and the Qblox stack.
 
 # Advertise the Qblox experiments to scqo so Session.catalog() finds them without the

@@ -1,4 +1,4 @@
-# LCHQBDriver
+# scqo-qblox
 
 Qblox backend for the vendor-neutral `scqo` experiment API. It implements the Qblox-specific
 half of each experiment (`probe()`) plus the backend/device adapter over `qblox_scheduler`

@@ -1,6 +1,6 @@
 # qblox_config
 
-Analogous to LCHQMDriver's `quam_config/`. Holds the Qblox device-model definition and
+Analogous to scqo-qm's `quam_config/`. Holds the Qblox device-model definition and
 the scripts that generate the initial serialized config into `../qblox_state/`.
 
 To fill in:

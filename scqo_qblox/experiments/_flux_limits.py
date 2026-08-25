@@ -1,4 +1,4 @@
-"""What volts a Qblox flux port may emit — the sibling of LCHQMDriver's module.
+"""What volts a Qblox flux port may emit — the sibling of scqo-qm's module.
 
 Same two frame-named entry points as the QM backend, so one vocabulary describes
 both instruments:

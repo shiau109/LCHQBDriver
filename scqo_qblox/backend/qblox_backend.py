@@ -302,7 +302,7 @@ def snap_ns(value: float, what: str, *, grid_ns: int = 1) -> float:
       reset (``thermalization_factor x t1_s``) is never on the grid by luck, and
       a sub-nanosecond difference in a ~1 ms wait changes nothing measurable;
       refusing would make the calibration loop unable to write its own result.
-      LCHQMDriver's ``set_thermalization_time`` already decided this.
+      scqo-qm's ``set_thermalization_time`` already decided this.
 
     ``qblox_scheduler`` refuses anything off its 1 ns ``GRID_TIME`` (tolerance
     1.1e-3 ns) at COMPILE time, with a raw vendor traceback pointing at an

@@ -1,7 +1,7 @@
 """Custom Qblox device elements used by this lab's dut configs.
 
 Originally copied from QBLOX_training/docs/applications/superconducting/
-custom_elements.py (the read-only reference repo) so LCHQBDriver is
+custom_elements.py (the read-only reference repo) so scqo-qblox is
 self-contained at runtime: ``QuantumDevice.from_json_file`` can only deserialize
 a dut config whose ``element_type`` classes are imported (registered) first —
 ``QbloxBackend`` imports this module before loading. This module now deliberately
