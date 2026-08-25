@@ -1,0 +1,65 @@
+# Offline proof for the Qblox backend. Unlike scqo-qm - whose git-sourced dependencies
+# and pinned py3.11 lockfile make CI impractical - this repo's whole stack installs from
+# PyPI, so it can be checked automatically.
+#
+# THE qblox-scheduler PIN IS LOAD-BEARING, not hygiene. PyPI's only non-prerelease is an
+# empty 0.0.0 placeholder that fails to build, which is why pyproject floors it at a
+# prerelease; and b4 vs b6 genuinely DISAGREE about whether a schedule is legal (a probe
+# once compiled clean offline and died on the cluster). Pin the exact version the lab
+# runs, and bump it here and in the lab venv together, never independently.
+#
+# scqo and scqat are checked out as siblings - pyproject resolves scqo as `../SCQO`, so
+# a standalone checkout of this repo cannot install.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      MPLBACKEND: Agg   # scqat draws figures during tests; never touch a GUI backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: scqo-qblox
+
+      - name: Check out the siblings this repo cannot install without
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_OWNER: ${{ github.event.pull_request.head.repo.owner.login || github.repository_owner }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+        run: |
+          set -eu
+          for name in SCQO scqat; do
+            repo="shiau109/$name"; ref=""; why="upstream"
+            if [ "$HEAD_OWNER" != "shiau109" ] && gh repo view "$HEAD_OWNER/$name" >/dev/null 2>&1; then
+              repo="$HEAD_OWNER/$name"; why="fork owned by $HEAD_OWNER"
+            fi
+            if gh api "repos/$repo/branches/$HEAD_BRANCH" >/dev/null 2>&1; then
+              ref="$HEAD_BRANCH"; why="$why, branch matched"
+            fi
+            gh repo clone "$repo" "$name" -- --depth 1 ${ref:+--branch "$ref"}
+            echo "- \`$name\` <- \`$repo\` @ \`${ref:-<default branch>}\` ($why)" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the sibling layout
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ./scqat
+          pip install -e ./SCQO
+          pip install -e ./scqo-qblox pytest
+          pip install "qblox-scheduler==1.0.0b6"
+
+      - name: Run the offline test suite
+        working-directory: scqo-qblox
+        run: python -m pytest tests/ -q

@@ -2,7 +2,8 @@
 
 ## What this repo is
 The Qblox sibling of scqo-qm. It implements the **`scqo`** instrument-agnostic
-experiment API (`D:\github\SCQO`) against the **Qblox** control stack
+experiment API ([SCQO](https://github.com/shiau109/SCQO), a hard dependency resolved as the
+sibling checkout `../SCQO`) against the **Qblox** control stack
 (`qblox_scheduler`: `Schedule`, `HardwareAgent`, `QuantumDevice`).
 
 ## Three design rules (do not break these)
@@ -35,8 +36,10 @@ scqo_qblox/
                              #   DeviceElement behind a target's default channel (ports,
                              #   flux sweet spot), addressed through the ROSTER
     _reset.py, _state.py, _flux_limits.py, _amp_limits.py   # the shared guard/branch helpers
-    <name>.py                # one module per core experiment (all 17): Qblox<Name>(<Name>) with
-                             #   only probe() — e.g. resonator_spectroscopy, qubit_ramsey, ...
+    <name>.py                # ONE module per experiment this backend realizes: Qblox<Name>(<Name>)
+                             #   with only probe() — e.g. resonator_spectroscopy, qubit_ramsey.
+                             #   NOT every scqo experiment is realized here (several are QM-only);
+                             #   __init__.py's __all__ is the authoritative list
 qblox_config/                # ~ quam_config: device-model + config generation (stubs)
 qblox_state/                 # ~ quam_state: serialized dut_config.json / hw_config.json (generated)
 scqo_qblox/scqo_backend.py            # the `scqo.backends` entry-point factory
@@ -68,10 +71,10 @@ simulated and saves nothing. Setup/labconfig detail lives in `SCQO\INSTALL.md` �
 Everything else (parameters, fitting, writeback, simulation) is inherited from `scqo`.
 
 ## Reference
-- Terminology (Experiment = probe + estimator; "protocol" retired): `D:\github\SCQO\CLAUDE.md` → **Terminology**.
-- Shared API + patterns: `D:\github\SCQO\CLAUDE.md`.
-- Qblox usage examples (read-only demo repo): `D:\github\QBLOX_training\docs\applications\superconducting`.
-- QM sibling (do not import from it): `D:\github\scqo-qm`.
+- Terminology (Experiment = probe + estimator; "protocol" retired): SCQO's `CLAUDE.md` -> **Terminology**.
+- Shared API + patterns: SCQO's `CLAUDE.md` (the sibling checkout, or github.com/shiau109/SCQO).
+- Qblox usage examples: `QBLOX_training`, the vendor's read-only example repo (`docs/applications/superconducting`). A LOCAL reference checkout on the lab machine; not needed to build or test this repo.
+- QM sibling (do not import from it): [scqo-qm](https://github.com/shiau109/scqo-qm).
 
 ## Hardware invariants
 - `scqo_qblox/elements.py` vendors the lab's element types and deliberately EXTENDS the
@@ -319,24 +322,27 @@ one proves nothing, since the time grid, the DAC range and the latched-parameter
 alignment all live in the compiler; `conftest.compile_probe` is the shared door).
 
 **One vendor version, both venvs.** `uv run pytest` uses `.venv`; `scqo run` on the
-cluster uses `D:\github\.venv-qblox`. They must hold the same `qblox-scheduler` — on
+cluster uses the shared `.venv-qblox`. They must hold the same `qblox-scheduler` - on
 2026-07-26 they did not (b4 vs b6) and the two versions *disagreed about whether a
 schedule is legal*: `readout_frequency` compiled clean offline and died on hardware.
 Both are now 1.0.0b6 + qblox_instruments 1.3.0. After changing either, run the suite
-in the lab venv too:
-`D:\github\.venv-qblox\Scripts\python.exe -m pytest tests/ -q`.
+in the lab venv too, with its interpreter directly:
+`<.venv-qblox>/Scripts/python.exe -m pytest tests/ -q`.
 
 ### Testing discipline — here, just run the whole thing
-`uv run pytest tests/ -q` — **~266 tests, ~100 s** (plain `uv run` is correct: `scqo` is a hard
-dependency in `pyproject.toml`, so uv's sync keeps it). At this size a selection map would cost
-more attention than it saves; unlike SCQO (618 tests, ~10 min) and scqat (329 / ~84 s), the full
-suite IS the targeted run. Run it before every commit.
+`uv run pytest tests/ -q` (plain `uv run` is correct: `scqo` is a hard dependency in
+`pyproject.toml`, so uv's sync keeps it). This suite is small enough that a selection map would
+cost more attention than it saves — unlike SCQO's, which is minutes — so the full run IS the
+targeted run. Run it before every commit. No test counts or timings are quoted here on purpose:
+the previous ones rotted into three mutually contradictory figures for this repo alone. Each
+release records what it actually ran, in the `OFFLINE-VALIDATED` line of SCQO's `RELEASES.toml`.
 
-The one narrowing worth knowing: **`test_scqo_glue.py` is ~14 s of the 33 s** — it shells out to
+The one narrowing worth knowing: **`test_scqo_glue.py` is the slowest file by a wide margin** — it shells out to
 the real `scqo` CLI and runs the AI-loop demo end-to-end. While iterating on a probe, loop on
-`uv run pytest tests/test_probe_surface.py tests/test_time_grid.py -q` (30 tests, ~10 s measured —
-per-test time is milliseconds, the cost is fixture + qblox_scheduler import) and pick the glue test
-back up before you commit. Below ~10 s there is nothing left to win here; don't over-narrow.
+`uv run pytest tests/test_probe_surface.py tests/test_time_grid.py -q` — per-test time is
+milliseconds there, so almost all of it is fixture + `qblox_scheduler` import — and pick the glue
+test back up before you commit. Once you are down to the import cost there is nothing left to win;
+don't over-narrow.
 
 | File | Covers |
 |---|---|
