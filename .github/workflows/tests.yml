@@ -36,16 +36,33 @@ jobs:
           HEAD_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
         run: |
           set -eu
+          # The fork wins ONLY if it also carries a branch of this run's name.
+          # Asking "does the fork exist?" and "does it have the branch?" as two
+          # INDEPENDENT questions is what let a fork's stale default branch become
+          # the baseline: scqo-qblox PR #12 (2026-08-26) resolved to
+          # Yuhowlin/SCQO@main = v3.0.0 while upstream was already v3.2.0, so a
+          # green tick there would have proved nothing about current main. One
+          # branch probe answers both at once.
+          #
+          # Residual case, by design: a PR opened FROM a fork's default branch
+          # (HEAD_BRANCH = main) still pairs with that fork's main -- correct when
+          # both halves really did change there, stale otherwise. The resolved SHA
+          # and its date are reported below so that stays visible rather than
+          # silent. (SCQO's and scqat's workflows carry the same rule, plus
+          # workflow_dispatch inputs to force a pairing; this one has no inputs.)
           for name in SCQO scqat; do
             repo="shiau109/$name"; ref=""; why="upstream"
-            if [ "$HEAD_OWNER" != "shiau109" ] && gh repo view "$HEAD_OWNER/$name" >/dev/null 2>&1; then
+            if [ "$HEAD_OWNER" != "shiau109" ] && gh api "repos/$HEAD_OWNER/$name/branches/$HEAD_BRANCH" >/dev/null 2>&1; then
               repo="$HEAD_OWNER/$name"; why="fork owned by $HEAD_OWNER"
             fi
             if gh api "repos/$repo/branches/$HEAD_BRANCH" >/dev/null 2>&1; then
               ref="$HEAD_BRANCH"; why="$why, branch matched"
             fi
             gh repo clone "$repo" "$name" -- --depth 1 ${ref:+--branch "$ref"}
-            echo "- \`$name\` <- \`$repo\` @ \`${ref:-<default branch>}\` ($why)" >> "$GITHUB_STEP_SUMMARY"
+            sha=$(git -C "$name" rev-parse --short HEAD)
+            when=$(git -C "$name" log -1 --format=%cs)
+            echo "PAIRED $name: $repo @ ${ref:-<default branch>} = $sha ($when)  ($why)"
+            echo "- \`$name\` <- \`$repo\` @ \`${ref:-<default branch>}\` = \`$sha\` ($when) ($why)" >> "$GITHUB_STEP_SUMMARY"
           done
 
       - uses: actions/setup-python@v5
