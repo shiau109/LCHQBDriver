@@ -261,6 +261,19 @@ Everything else (parameters, fitting, writeback, simulation) is inherited from `
   SCQO's CLI: that CLI is vendor-neutral, and an `os._exit` there would skip dataset flushes
   for every backend. Closing the loop at `atexit` was rejected too — `atexit` is LIFO and
   qcodes registers its own instrument-closing hooks.
+- **`release_instruments()` hands the cluster back before an interactive prompt** — the
+  `scqo.Backend` hook, implemented HERE and nowhere else (QM closes its QuantumMachine per
+  acquisition; this backend has no disconnect at all, so one `acquire()` pins four sockets
+  per cluster until the process exits). SCQO's `_review_core` calls it before blocking on
+  "apply which updates?", which is safe because deciding a suggestion writes only the
+  in-memory config and the JSON files — the values reach hardware at the next run, which
+  reconnects. Two traps it is written against: `get_clusters()` CONNECTS when `_clusters` is
+  empty (so asking to disconnect would connect — read `_clusters` directly), and
+  `Cluster.close()` can block forever (so each close runs on a daemon thread joined with
+  `_CLUSTER_CLOSE_TIMEOUT_S`; past it we warn and keep the socket, never hang). Deliberately
+  NOT `calibrate_mixers.py`'s `_hard_exit` answer: killing the process is legitimate at the
+  end of a standalone tool, never inside a session that still owes the operator a decision.
+  `tests/test_release_instruments.py` pins all of it with fakes — no cluster needed.
 - **Flux is in VOLTS on the neutral surface and a FRACTION on the wire.** Every Qblox sequencer
   operand is a fraction of full scale — `VoltageOffset`'s operand is documented "the unitless
   amplitude", `offset_awg_path{x}` is `Numbers(-1.0, 1.0)` with `unit=""`, and the scheduler's

@@ -110,6 +110,11 @@ _DEFAULT_MAX_OUTPUT_ATT = 60
 _UNIVERSALLY_SAFE_ATT = 20
 #: Sidecar holding the discovered per-output maxima, beside mixer_cal.json.
 ATT_LIMITS_FILE = "att_limits.json"
+#: Deadline for ONE ``Cluster.close()`` in ``release_instruments``. Generous:
+#: releasing is a courtesy, so a slow close should be waited out rather than
+#: abandoned, and the caller is about to ask a human a question anyway. Past it
+#: we warn and keep the socket, which is what happens today in any case.
+_CLUSTER_CLOSE_TIMEOUT_S = 15.0
 #: FLOOR for the run timeout, in SECONDS (the unit ``HardwareAgent.run`` takes;
 #: its own default is 10 s). The actual deadline is computed per experiment by
 #: ``_run_timeout_s`` and never goes below this.
@@ -1465,6 +1470,73 @@ class QbloxBackend(Backend):
 
                 silence_proactor_self_pipe_noise(self._hw_agent)
         return self._to_canonical(raw, experiment)
+
+    def release_instruments(self) -> list[str]:
+        """Hand the cluster back; the names released. The ``scqo.Backend`` hook.
+
+        This backend is the reason the hook exists: ``HardwareAgent.run()``
+        calls ``connect_clusters()`` and the vendor exposes NO disconnect, so a
+        process that has acquired once holds four sockets per cluster until it
+        exits. The CLI calls this before blocking on the accept prompt — an
+        operator who walks away from an overnight campaign's "apply which
+        updates?" would otherwise pin the cluster all night, and that
+        contention degrades every later run (CLAUDE.md, the zombie-process
+        paragraph). Safe there: a decision only writes the in-memory config and
+        the JSON files, and the next ``acquire()`` reconnects from scratch.
+
+        Reads ``_clusters`` DIRECTLY and returns ``[]`` when it is empty.
+        ``get_clusters()`` would be the obvious accessor and is the wrong one:
+        it calls ``connect_clusters()`` when nothing is connected, so asking to
+        disconnect would connect.
+
+        ``Cluster.close()`` can block forever (``scripts/calibrate_mixers.py``
+        ``close_cluster`` says why, and why it cannot safely be moved
+        off-thread), so each close runs on a DAEMON thread that is joined with a
+        deadline. That bounds the caller: the worst case is a warning and a
+        socket still held — exactly today's behaviour — never a hang. The
+        script's ``_hard_exit`` answer is deliberately NOT reused: killing the
+        process is legitimate at the end of a standalone tool, never inside a
+        live session that still owes the operator a decision.
+        """
+        import threading
+
+        components = dict(getattr(self._hw_agent, "_clusters", None) or {})
+        if not components:
+            return []  # nothing ever connected: never dial in order to hang up
+        coordinator = self._hw_agent.instrument_coordinator
+        released: list[str] = []
+        for name, component in components.items():
+            try:
+                coordinator.remove_component(component.name)
+            except Exception as err:  # already gone: closing is still worth trying
+                warnings.warn(f"{name}: removing the instrument-coordinator component "
+                              f"failed ({type(err).__name__}: {err})", stacklevel=2)
+            closer = threading.Thread(target=self._close_cluster, args=(name, component),
+                                      name=f"release-{name}", daemon=True)
+            closer.start()
+            closer.join(_CLUSTER_CLOSE_TIMEOUT_S)
+            if closer.is_alive():
+                warnings.warn(
+                    f"{name}: Cluster.close() did not return within "
+                    f"{_CLUSTER_CLOSE_TIMEOUT_S:g} s; its sockets stay open until this "
+                    f"process exits", stacklevel=2)
+                continue
+            released.append(name)
+        # Cleared even for a close that timed out: the components are no longer
+        # registered, so a later run must rebuild them. connect_clusters()
+        # closes a same-named stale ClusterComponent itself.
+        self._hw_agent._clusters.clear()
+        return released
+
+    @staticmethod
+    def _close_cluster(name: str, component: Any) -> None:
+        """Close one ClusterComponent's underlying Cluster. Never raises: it runs
+        on a daemon thread whose exception would only print a stray traceback."""
+        try:
+            component.cluster.close()
+        except Exception as err:  # noqa: BLE001 - a failed close must not kill the CLI
+            warnings.warn(f"{name}: Cluster.close() raised "
+                          f"({type(err).__name__}: {err})", stacklevel=2)
 
     def preview(self, experiment: "Experiment", out_dir: Path,
                 **options: Any) -> list[Path]:
