@@ -1,6 +1,7 @@
 """The output attenuator's ceiling is a property of the MODULE, not of this driver.
 
-chipA, 2026-07-29: ``scqo run qubit_spectroscopy_overlap`` died with
+chipA, 2026-07-29: ``scqo run qubit_spectroscopy_overlap`` (that experiment has
+since been merged into ``qubit_spectroscopy`` as ``readout_overlap=true``) died with
 ``38 is invalid: must be between 0 and 30 inclusive; Parameter:
 cluster_A_module4.out0_att``. The drive-power solve had picked 38 dB against a
 hardcoded 0..60 range, and slot 4 (a QCM-RF, ISA 2.1) attenuates at most 30 —

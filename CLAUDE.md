@@ -6,7 +6,7 @@ experiment API ([SCQO](https://github.com/shiau109/SCQO), a hard dependency reso
 sibling checkout `../SCQO`) against the **Qblox** control stack
 (`qblox_scheduler`: `Schedule`, `HardwareAgent`, `QuantumDevice`).
 
-## Three design rules (do not break these)
+## Four design rules (do not break these)
 1. **Independent of Quantum Machines.** Never import `qm`, `quam`, `quam_builder`,
    `qualibrate`, or `qualibration_libs`. The only shared code is `scqo`, which is
    itself vendor-free. (See `pyproject.toml` — no QM packages.)
@@ -15,6 +15,19 @@ sibling checkout `../SCQO`) against the **Qblox** control stack
    only the Qblox-specific halves: `probe()` per experiment and the backend/device adapter.
 3. **Runs manually and via AI through the same `scqo.Session`.** `Session.catalog()` /
    `Session.run()` / `Session.device_state()` are plain JSON in/out.
+4. **Backend parity — the rule lives in `SCQO\CLAUDE.md` (*Backend parity*).** Given
+   one Parameters object, this `probe()` and the QM one must realize the SAME
+   sequence: same pulse order, same pulses present, same tones on during
+   acquisition. Only vendor idiom may differ (ASAP chaining and `rel_time` here
+   against `align()`/`wait()` there; a stitched AWG-offset pair against a rendered
+   waveform). A field description saying the other backend "ignores" a parameter is
+   the counter-example, not an exemption — that sentence is what let
+   `qubit_spectroscopy` latch a continuous drive here while QM played a finite
+   pulse, so the same command measured a Stark-shifted line on one instrument and a
+   bare one on the other, and both wrote the same `drive_freq_hz`.
+   `tests/test_sequential_timing.py` is this repo's half of the pin. An OPTIONAL
+   CAPABILITY a backend cannot realize is the exception, and must refuse BY NAME
+   (see `experiments/_reset.py`).
 
 ## Layout
 ```
@@ -388,7 +401,7 @@ don't over-narrow.
 | `test_active_reset.py` | `reset_method="active"`: the opt-in census, the four refusals, the acq-channel rule, rounds/settle, the sequential-feedback rule (needs `fixtures/hw_config_2q.json`) |
 | `test_qblox_power.py` | output-att solves, the hardware-config write surface, dual-file save, `power_context` |
 | `test_att_limits.py` | the per-module attenuator ceiling: clamp-not-refuse, when the cluster is asked and when it must NOT be, the power-preserving re-solve, the sidecar |
-| `test_overlap_timing.py` | `qubit_spectroscopy_overlap`: the two tones co-start and the ADC opens `acq_start_ns` later — asserted on the COMPILED tree with accumulated absolute times |
+| `test_sequential_timing.py` | the BACKEND-PARITY half: `qubit_spectroscopy`'s drive ends at the readout tone's START (`readout_overlap=false`) or its END (`true`), at all three emission shapes — asserted on the COMPILED tree with accumulated absolute times |
 | `test_qblox_reset.py` | `thermalization_time_s` as a neutral drive-channel knob |
 | `test_flux_limits.py` | the flux rail per MODULE, the volts→DAC-fraction conversion, the two frames, the RF-wiring refusal |
 | `test_readout_duration.py` | duration/window knobs on the readout view (pure stubs, no qblox_scheduler) |

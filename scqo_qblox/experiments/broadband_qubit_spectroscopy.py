@@ -39,7 +39,7 @@ class QbloxBroadbandQubitSpectroscopy(BroadbandQubitSpectroscopy):
             IdlePulse,
             Measure,
             SetClockFrequency,
-            VoltageOffset,
+            SquarePulse,
         )
         from qblox_scheduler.operations.loop_domains import DType, arange, linspace
 
@@ -49,16 +49,25 @@ class QbloxBroadbandQubitSpectroscopy(BroadbandQubitSpectroscopy):
         drive_clock = f"{target}.01"
         mw_port = element.ports.microwave
         mw_port = mw_port() if callable(mw_port) else mw_port
+        # / 1e9, never * 1e-9: the probes' float-exactness rule
+        drive_len_s = round(float(self.params.drive_len_ns)) / 1e9
 
         schedule = Schedule(f"broadband_qubit_spec_{target}")
         with schedule.loop(arange(0, reps, 1, DType.NUMBER)):
             with schedule.loop(
                 linspace(f_start, f_stop, n_pts, dtype=DType.FREQUENCY)
             ) as freq:
-                # Continuous weak drive on the microwave port
-                schedule.add(VoltageOffset(drive_amp, 0, port=mw_port, clock=drive_clock))
                 schedule.add(SetClockFrequency(clock=drive_clock, frequency=freq))
                 add_reset(schedule, self, target)
+                # A FINITE saturation pulse, over before the readout tone starts —
+                # the same sequence the QM sibling plays (it reuses that backend's
+                # qubit_spectroscopy builder verbatim). This used to be a latched
+                # VoltageOffset held across the whole sub-band, which left the
+                # drive live through every Measure. ASAP chaining is the anchor:
+                # the pulse has a length, so the Measure lands at its end.
+                schedule.add(
+                    SquarePulse(drive_amp, drive_len_s, port=mw_port, clock=drive_clock)
+                )
                 schedule.add(
                     Measure(
                         target,
@@ -67,9 +76,6 @@ class QbloxBroadbandQubitSpectroscopy(BroadbandQubitSpectroscopy):
                     )
                 )
                 schedule.add(IdlePulse(4e-9))
-        # Drive OFF before end of schedule
-        schedule.add(VoltageOffset(0, 0, port=mw_port, clock=drive_clock))
-        schedule.add(IdlePulse(4e-9))
         return schedule
 
     def probe(self) -> xr.Dataset:

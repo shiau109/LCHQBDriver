@@ -16,7 +16,6 @@ from . import qubit_relaxation  # noqa: F401  (import side effect: @register)
 from . import qubit_spectroscopy  # noqa: F401  (import side effect: @register)
 from . import qubit_spectroscopy_cryoscope  # noqa: F401  (import side effect: @register)
 from . import qubit_spectroscopy_flux_pulse  # noqa: F401  (import side effect: @register)
-from . import qubit_spectroscopy_overlap  # noqa: F401  (import side effect: @register)
 from . import qubit_sqrb  # noqa: F401  (import side effect: @register)
 from . import qubit_thermal_population  # noqa: F401  (import side effect: @register)
 from . import qubit_tomography  # noqa: F401  (import side effect: @register)
@@ -38,7 +37,6 @@ __all__ = [
     "resonator_spectroscopy",
     "qubit_spectroscopy",
     "qubit_spectroscopy_flux_pulse",
-    "qubit_spectroscopy_overlap",
     "qubit_sqrb",
     "qubit_ramsey",
     "qubit_ramsey_cryoscope",

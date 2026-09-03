@@ -21,18 +21,20 @@ It costs ``integration_time + acq_delay + 364 ns + rxy.duration + 4 ns``
 (~18.8 us on chipA) against a 1.86 ms thermal wait — the ~100x that makes long
 averaged sweeps affordable.
 
-WHY ONLY FOUR PROBES MAY ASK FOR IT. Active reset thresholds against
-``acq_threshold``, which ``single_shot_readout`` solved at ONE readout
-condition, and it replaces the reset with a measurement. So it is valid only
-where the readout condition is frozen for the whole run and the reset is a
-genuine state reset — the four coherent-drive carriers, which are exactly the
-probes ``_state.py`` already serves. ``readout_frequency`` / ``readout_power``
-SWEEP the readout condition; ``single_shot_readout`` is the calibration itself
-(and would bias the |1> blob it measures); ``qubit_spectroscopy`` uses its
-``Reset`` as the driven-dwell wait under a live CW drive. Each of those refuses
-BY NAME — the neutral field's rule is that an unrealizable method raises rather
-than silently thermalizing, because a downgraded run completes, looks plausible,
-and only the wall clock disagrees.
+WHICH PROBES MAY ASK FOR IT. Active reset thresholds against ``acq_threshold``,
+which ``single_shot_readout`` solved at ONE readout condition, and it replaces
+the reset with a measurement. So it is valid only where the readout condition is
+frozen for the whole run and the reset is a genuine state reset — the four
+coherent-drive carriers, which are exactly the probes ``_state.py`` already
+serves, plus ``qubit_spectroscopy``, whose saturation drive became a finite
+``SquarePulse`` that has ended before the next point's reset (it used to latch a
+``VoltageOffset`` across the whole sweep, which made that ``Reset`` a driven
+dwell rather than a state reset — the reason it was denied) and which sweeps only
+the DRIVE frequency. ``readout_frequency`` / ``readout_power`` SWEEP the readout
+condition; ``single_shot_readout`` is the calibration itself (and would bias the
+|1> blob it measures). Each of those refuses BY NAME — the neutral field's rule
+is that an unrealizable method raises rather than silently thermalizing, because
+a downgraded run completes, looks plausible, and only the wall clock disagrees.
 
 THREE THINGS HERE ARE LOAD-BEARING, each verified against the compiler:
 
@@ -89,9 +91,10 @@ from ._state import require_discriminator
 #: instead of silently running a wrong sequence.
 ACTIVE_RESET_ATTR = "supports_active_reset"
 
-#: The four that opt in, for the refusal message only (the authority is the
-#: class attribute — this is a hint, and the census test keeps it honest).
-_CARRIERS = "qubit_relaxation, qubit_ramsey, qubit_echo, qubit_power_rabi"
+#: Those that opt in, for the refusal message only (the authority is the class
+#: attribute — this is a hint, and the census test keeps it honest).
+_CARRIERS = ("qubit_relaxation, qubit_ramsey, qubit_echo, qubit_power_rabi, "
+             "qubit_spectroscopy")
 
 
 def check_reset_method(experiment: Any) -> str:

@@ -36,19 +36,17 @@ from conftest import compile_probe, make_backend, make_experiment  # noqa: E402
 #: the four probes that opt in — readout held at the calibrated point for the
 #: whole run, and a Reset that is a real state reset. Exactly the set
 #: `_state.py` serves, which is not a coincidence: both need the discriminator.
-CARRIERS = ["qubit_relaxation", "qubit_ramsey", "qubit_echo", "qubit_power_rabi"]
+CARRIERS = ["qubit_relaxation", "qubit_ramsey", "qubit_echo", "qubit_power_rabi",
+            # its saturation drive is a finite SquarePulse now, so the Reset it
+            # already had became a real state reset; the readout condition never
+            # moves (only the DRIVE frequency sweeps). NOT hardware-validated.
+            "qubit_spectroscopy"]
 
 #: probes that carry `reset_method` and must REFUSE 'active', with why.
 DENIED = {
     "readout_frequency": "sweeps the readout frequency",
     "readout_power": "sweeps the readout amplitude",
     "single_shot_readout": "is the discriminator's own calibration",
-    "qubit_spectroscopy": "its Reset is the driven dwell, not a state reset",
-    # unlike its sibling this one's Reset IS a real state reset (the drive comes
-    # up with the readout tone, after it), so active reset is physically valid
-    # here — it stays denied only because nothing has validated it on hardware.
-    # Opting in later is one ClassVar, plus moving this line to CARRIERS.
-    "qubit_spectroscopy_overlap": "not yet validated on hardware",
     # both cryoscopes' Resets are real state resets at the standing bias, so
     # active reset is physically plausible — denied until the QM twins'
     # active-reset experience is validated on THIS backend's hardware.
@@ -107,6 +105,13 @@ def _experiment(tmp_path, roster, name, *, targets=("q1",), hw_config=None, **pa
     kwargs.update(params)
     exp = make_experiment(cls, backend, roster,
                           cls.Parameters(targets=list(targets), **kwargs))
+    if "drive_power_dbm" in cls.Parameters.model_fields:
+        # the two-tone probes read the drive chain's residual (spec_amp) BEFORE
+        # they reach the reset, and the fixture leaves it unseeded; the core
+        # run() solves it inside drive_power_boundary, which probe()-only tests
+        # never enter (test_probe_surface seeds it the same way)
+        for target in targets:
+            exp.device.channel(target, "drive").drive_power_dbm = -33.0
     return backend, exp
 
 
