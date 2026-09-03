@@ -70,6 +70,15 @@ Students use the **`scqo` command** and edit **nothing** here: select a setup
 (`scqo user --device <name> [--setup <name>]`) and run. With no config everything runs
 simulated and saves nothing. Setup/labconfig detail lives in `SCQO\INSTALL.md` §2.
 
+**State authority (`state_sync`)**: sessions on this backend run `"pull"` — the vendor config
+(`dut_config.json` + `hw_config.json`) is the truth at startup and scqo pushes only what it
+freshly measures. `"push"` is TEMPORARILY refused for every hardware backend by scqo's
+`make_session` (a push would seed the vendor from `scqo_state.json` with no history rows and
+clobber hand edits such as the LO / attenuation values); this factory never reads
+`cfg.state_sync`, so nothing here needs lifting when that changes. `scripts/check_real_config.py`
+builds `Session(..., state_sync="push")` directly on a temp COPY of the real config — deliberate,
+and outside `make_session`.
+
 ## Adding an experiment
 1. Subclass the backend-free experiment from `scqo.experiments.<name>`.
 2. Implement only `probe()` using `qblox_scheduler` (import the vendor lib *inside* the
