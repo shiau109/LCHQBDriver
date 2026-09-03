@@ -16,9 +16,11 @@ fields). The executable conversions are the three channel views below.
 
 from __future__ import annotations
 
+import json
 import math
 import warnings
 from contextlib import contextmanager
+from importlib.metadata import version as _dist_version
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -957,6 +959,30 @@ class QbloxDeviceModel(DeviceModel):
                 operations=_derived_operations(self._roster, ch))
         return out
 
+    def config_texts(self) -> dict[str, str]:
+        """The two vendor config files as ``save()`` would write them, from memory:
+        ``{"dut_config.json": text, "hw_config.json": text}`` — the agent's
+        ``hardware_configuration`` is the RUNTIME truth, so it is what lands in
+        hw_config.json AND replaces the copy embedded in the dut (``to_json`` would
+        re-embed the stale copy WITH explicit nulls, the chipA 2026-07-16 crash
+        trigger — see save()). Read-only: ``qd.hardware_config`` is NOT re-pointed
+        here (save() does that), nothing is written, no cluster is touched. ``{}``
+        without an agent (no hardware config to snapshot)."""
+        hw = self._hw_agent.hardware_configuration if self._hw_agent is not None else None
+        if hw is None:
+            return {}
+        # exclude_none is LOAD-BEARING: pydantic's default dump writes every unset
+        # Optional as an explicit null, and the qblox compiler treats an
+        # explicitly-null channel description as "user set None" (it lands in
+        # model_fields_set on reload) and crashes sequencer compilation — whereas
+        # an ABSENT key gets a default ChannelDescription. Never write nulls.
+        hw_text = hw.model_dump_json(indent=2, exclude_none=True)
+        data = json.loads(self._qd.to_json())
+        if "hardware_config" in data:
+            data["hardware_config"] = json.loads(hw.model_dump_json(exclude_none=True))
+        return {"dut_config.json": json.dumps(data, indent=4) + "\n",
+                "hw_config.json": hw_text + "\n"}
+
     def save(self) -> None:
         # Write back to the EXACT files the device was loaded from. (to_json_file
         # writes <device_name>.json, which silently diverges from the dut_config.json
@@ -968,30 +994,13 @@ class QbloxDeviceModel(DeviceModel):
             # embedded in dut_config.json in step BEFORE serializing the quantum
             # device, so the two files can never drift through a save.
             self._qd.hardware_config = hw
-            if self._hw_config_file is not None:
-                with open(self._hw_config_file, "w", encoding="utf-8") as f:
-                    # exclude_none is LOAD-BEARING: pydantic's default dump writes
-                    # every unset Optional as an explicit null, and the qblox
-                    # compiler treats an explicitly-null channel description as
-                    # "user set None" (it lands in model_fields_set on reload) and
-                    # crashes sequencer compilation — whereas an ABSENT key gets a
-                    # default ChannelDescription. Never write nulls.
-                    f.write(hw.model_dump_json(indent=2, exclude_none=True))
+        texts = self.config_texts()  # the same two texts a setup snapshot stores
+        if hw is not None and self._hw_config_file is not None:
+            with open(self._hw_config_file, "w", encoding="utf-8") as f:
+                f.write(texts["hw_config.json"])
         if self._config_file is not None:
             with open(self._config_file, "w", encoding="utf-8") as f:
-                f.write(self._qd.to_json())
-            if hw is not None:
-                # to_json has no exclude_none switch, so it re-embeds the hardware
-                # config WITH explicit nulls (the crash trigger above). Rewrite that
-                # one block from the SAME clean dump hw_config.json got — the two
-                # files then carry identical config content and no nulls survive.
-                import json as _json
-
-                data = _json.loads(Path(self._config_file).read_text(encoding="utf-8"))
-                if "hardware_config" in data:
-                    data["hardware_config"] = _json.loads(hw.model_dump_json(exclude_none=True))
-                    Path(self._config_file).write_text(_json.dumps(data, indent=4),
-                                                       encoding="utf-8")
+                f.write(texts["dut_config.json"] if texts else self._qd.to_json())
 
     def snapshot(self) -> dict:
         """``{entity: {knob: value}}`` over the channel entities this backend
@@ -1120,6 +1129,32 @@ class QbloxBackend(Backend):
         """
         run = f" --run {run_id}" if run_id else ""
         return f"python -m scqo_qblox.backend.apply_distortion --target {target}{run}"
+
+    def vendor_config_snapshot(self) -> dict[str, str]:
+        """The vendor config as held in memory, as the two files ``save()`` would
+        write (``QbloxDeviceModel.config_texts``): scqo's setup snapshot, stored per
+        run under ``<device>/setup_snapshots/``. Provenance only: never writes,
+        never touches the cluster, degrades to ``{}`` on any failure. Note that
+        ``acquire()`` may legitimately change ``output_att`` between the run-start
+        and run-end snapshots (``_sync_att_limits`` re-solves a chain under a
+        newly learned module ceiling) — scqo reports that as ``setup_snapshot.drift``.
+        """
+        try:
+            return self._device.config_texts()
+        except Exception:  # provenance must never fail a run
+            return {}
+
+    def versions(self) -> dict[str, str]:
+        """``{distribution: version}`` of this driver and its vendor libs, stamped
+        into the setup snapshot's manifest so a later ``scqo restore`` can warn when
+        the environment differs."""
+        out: dict[str, str] = {}
+        for name in ("scqo-qblox", "qblox-scheduler", "qblox-instruments"):
+            try:
+                out[name] = _dist_version(name)
+            except Exception:  # not installed here
+                continue
+        return out
 
     def power_context(self, qubits: list[str]) -> dict:
         """Raw readout + drive chain values per qubit (run-record provenance only).

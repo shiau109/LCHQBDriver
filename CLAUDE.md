@@ -53,8 +53,11 @@ scqo_qblox/
                              #   with only probe() — e.g. resonator_spectroscopy, qubit_ramsey.
                              #   NOT every scqo experiment is realized here (several are QM-only);
                              #   __init__.py's __all__ is the authoritative list
-qblox_config/                # ~ quam_config: device-model + config generation (stubs)
-qblox_state/                 # ~ quam_state: serialized dut_config.json / hw_config.json (generated)
+qblox_config/                # placeholder (README only): the device-model config is the setup's
+                             #   dut_config.json under <data_root>/<device>/<cid>/<setup>/backend_config/
+qblox_state/                 # placeholder (README only): the real dut_config.json + hw_config.json live in
+                             #   that backend_config/ folder; every scqo run snapshots them from memory
+                             #   (QbloxBackend.vendor_config_snapshot -> <device>/setup_snapshots/)
 scqo_qblox/scqo_backend.py            # the `scqo.backends` entry-point factory
                                  #   build_backend(cfg, setup, roster): loads the SELECTED
                                  #   named setup's vendor folder (setup["instrument_config"],
@@ -116,7 +119,11 @@ Everything else (parameters, fitting, writeback, simulation) is inherited from `
 - The agent's `hardware_configuration` dict is AUTHORITATIVE: every run recompiles from
   it and re-pushes attenuations, so a direct qcodes `.set()` is overwritten.
 - `save()` writes BOTH config files (`dut_config.json` + `hw_config.json`); the dut's
-  embedded `hardware_config` copy is synced first so they cannot diverge.
+  embedded `hardware_config` copy is synced first so they cannot diverge. Both texts come
+  from `QbloxDeviceModel.config_texts()`, which `vendor_config_snapshot()` returns WITHOUT
+  writing - the per-run setup snapshot (`<device>/setup_snapshots/`, `scqo restore`) is
+  therefore exactly what a save would have produced at run start. `_sync_att_limits` may
+  legitimately change `output_att` during `acquire()`; scqo reports that as `setup_snapshot.drift`.
 - `readout_power_dbm` ↔ readout `output_att` + `measure.pulse_amp`;
   `drive_power_dbm` ↔ drive-port `output_att` + `element.spec.spec_amp`
   (`output_att` takes EVEN integers; both solves keep the amplitude ≤ 0.5, the
@@ -201,7 +208,8 @@ Everything else (parameters, fitting, writeback, simulation) is inherited from `
   (PORT-level, shared by every element on the output; untracked wiring). Hand-edit
   only while NO session is live — `save()` rewrites the file from the in-memory
   config and would silently revert the edit — and restart notebook kernels after.
-  `power_context` stamps the readout LO into every run record.
+  `power_context` stamps the readout LO into every run record, and the setup snapshot
+  now carries the whole `hw_config.json` per run.
 - **Mixer calibration** (`scripts/calibrate_mixers.py`, notebook wrapper alongside) is an
   OPERATIONS tool, not part of the scqo surface: it drives the RF modules' built-in AMC
   straight through `qblox_instruments`, so no session/HardwareAgent may hold the cluster
@@ -409,6 +417,7 @@ don't over-narrow.
 | `test_state_discrimination.py` | `use_state_discrimination`: the two knobs, the thresholded probes, the `state` decode, the single_shot_readout proposal |
 | `test_active_reset.py` | `reset_method="active"`: the opt-in census, the four refusals, the acq-channel rule, rounds/settle, the sequential-feedback rule (needs `fixtures/hw_config_2q.json`) |
 | `test_qblox_power.py` | output-att solves, the hardware-config write surface, dual-file save, `power_context` |
+| `test_vendor_snapshot.py` | `vendor_config_snapshot`: deterministic, writes nothing, the EXECUTED config (not the disk copy), no nulls, parsed-equal to `save()`, degrades without an agent |
 | `test_att_limits.py` | the per-module attenuator ceiling: clamp-not-refuse, when the cluster is asked and when it must NOT be, the power-preserving re-solve, the sidecar |
 | `test_sequential_timing.py` | the BACKEND-PARITY half: `qubit_spectroscopy`'s drive ends at the readout tone's START (`readout_overlap=false`) or its END (`true`), at all three emission shapes — asserted on the COMPILED tree with accumulated absolute times |
 | `test_qblox_reset.py` | `thermalization_time_s` as a neutral drive-channel knob |
