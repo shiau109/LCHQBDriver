@@ -35,16 +35,26 @@ backend/device adapter over `qblox_scheduler` (`Schedule`, `HardwareAgent`,
 ```
 
 ```bash
-cd <parent>
-uv venv .venv --python 3.12
-uv pip install --python .venv/bin/python -e "./SCQO[viewer]" -e ./scqat -e ./scqo-qblox pytest
-uv pip install --python .venv/bin/python "qblox-scheduler==1.0.0b6"
+cd scqo-qblox
+uv run pytest tests/ -q     # builds scqo-qblox/.venv from uv.lock on first use
 ```
 
-Windows: `.venv\Scripts\python.exe`. The `qblox-scheduler` pin is not cosmetic — PyPI's
-only non-prerelease is an empty 0.0.0 placeholder that fails to build, and b4 vs b6
-*disagree about whether a schedule is legal* (a probe once compiled clean offline and
-died on hardware). Keep every environment on the same version.
+That is the whole setup. `uv.lock` carries `qblox-scheduler==1.0.0b6` and `scqat` editable
+from `../scqat` (propagated through SCQO's own `[tool.uv.sources]`), so `uv run` installs
+exactly the pinned version — no hand-typed pin line to get wrong. The clone layout above is
+still required: without `../SCQO` and `../scqat`, uv fails naming the missing path.
+
+The `qblox-scheduler` pin is not cosmetic — PyPI's only non-prerelease is an empty 0.0.0
+placeholder that fails to build, and b4 vs b6 *disagree about whether a schedule is legal*
+(a probe once compiled clean offline and died on hardware). **Keep every environment on the
+same version**, which is why this repo has a mandatory SECOND test run in the lab env:
+
+```bash
+<parent>/.venv-qblox/Scripts/python.exe -m pytest tests/ -q
+```
+
+Which environment for which repo, and the full text of that incident:
+[ENVIRONMENTS.md](ENVIRONMENTS.md).
 
 ## Adding an experiment
 
